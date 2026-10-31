@@ -1,0 +1,23 @@
+{
+  "name": "calculator-api",
+  "version": "1.0.0",
+  "description": "Simple calculator API built with Node.js and Express",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "keywords": [
+    "calculator",
+    "api",
+    "nodejs",
+    "express"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "supertest": "^7.0.0"
+  }
+}
