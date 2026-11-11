@@ -93,7 +93,7 @@
           <div>
             <div class="eyebrow"><span class="eyebrow-line"></span> YOUR FAMILY STORY</div>
             <h1>{{ selectedTree.name }}</h1>
-            <p class="page-subtitle"><span class="location-icon">⌖</span> {{ selectedTree.village }} <span class="dot-separator">·</span> {{ selectedTree.surname }} family <span class="dot-separator">·</span> {{ people.length }} {{ people.length === 1 ? 'person' : 'people' }}</p>
+            <p class="page-subtitle"><span class="location-icon">⌖</span> {{ familyLocation(selectedTree) }} <span class="dot-separator">·</span> {{ selectedTree.surname }} family <span class="dot-separator">·</span> {{ people.length }} {{ people.length === 1 ? 'person' : 'people' }}</p>
           </div>
           <div class="heading-actions">
             @if (admin.isAdmin) {
@@ -138,7 +138,7 @@
           </div>
           @if (view === 'graph') {
             <app-family-graph [people]="people" [links]="relationships" [partners]="partnerships" [selectedId]="selectedPerson?._id ?? null"
-              [title]="selectedTree.surname + ' family'" [subtitle]="'of ' + selectedTree.village"
+              [title]="selectedTree.surname + ' family'" [subtitle]="'of ' + familyLocation(selectedTree)"
               [photoUrl]="photoUrlFn" (personSelected)="openFromGraph($event)" />
             <p class="graph-tip">Click anyone to open their branch, where you can add a father, mother, sibling, or child.</p>
           } @else if (selectedPerson) {
@@ -277,11 +277,16 @@
         <h2>Create your family tree</h2>
         <p class="modal-intro">Give your family story a home. You can invite relatives later.</p>
         <form (ngSubmit)="createTree()">
-          <label>Family name<input name="name" [(ngModel)]="treeForm.name" placeholder="e.g. Bahadalapur Mohanty Family" required /></label>
+          <label>Family name<input name="name" [(ngModel)]="treeForm.name" placeholder="e.g. Sharma Family" maxlength="100" required /></label>
           <div class="form-pair">
-            <label>Village<input name="village" [(ngModel)]="treeForm.village" placeholder="e.g. Bahadalapur" required /></label>
-            <label>Family surname<input name="surname" [(ngModel)]="treeForm.surname" placeholder="e.g. Mohanty" required /></label>
+            <label>Family surname<input name="surname" [(ngModel)]="treeForm.surname" placeholder="e.g. Sharma" maxlength="100" required /></label>
+            <label>Village / town<input name="village" [(ngModel)]="treeForm.village" placeholder="e.g. Rampur" maxlength="100" required /></label>
           </div>
+          <div class="form-pair">
+            <label>District<input name="district" [(ngModel)]="treeForm.district" placeholder="e.g. Cuttack" maxlength="100" required /></label>
+            <label>State<input name="state" [(ngModel)]="treeForm.state" placeholder="e.g. Odisha" maxlength="100" required /></label>
+          </div>
+          <label>Country<input name="country" [(ngModel)]="treeForm.country" placeholder="e.g. India" maxlength="100" required /></label>
           @if (formError) { <p class="form-error">{{ formError }}</p> }
           <button class="button button-primary modal-submit" type="submit" [disabled]="saving">{{ saving ? 'Creating…' : 'Create family tree' }} <span>→</span></button>
         </form>
@@ -299,13 +304,18 @@
         <div class="modal-symbol">✎</div>
         <div class="eyebrow"><span class="eyebrow-line"></span> EDIT FAMILY</div>
         <h2>Edit family details</h2>
-        <p class="modal-intro">Change how this family is named across the app. People and connections are not affected.</p>
+        <p class="modal-intro">Change the family’s name and where they come from. People and connections are not affected.</p>
         <form (ngSubmit)="saveTree()">
           <label>Family name<input name="editTreeName" [(ngModel)]="editTreeForm.name" maxlength="100" required /></label>
           <div class="form-pair">
-            <label>Village<input name="editTreeVillage" [(ngModel)]="editTreeForm.village" maxlength="100" required /></label>
             <label>Family surname<input name="editTreeSurname" [(ngModel)]="editTreeForm.surname" maxlength="100" required /></label>
+            <label>Village / town<input name="editTreeVillage" [(ngModel)]="editTreeForm.village" maxlength="100" required /></label>
           </div>
+          <div class="form-pair">
+            <label>District<input name="editTreeDistrict" [(ngModel)]="editTreeForm.district" placeholder="e.g. Cuttack" maxlength="100" required /></label>
+            <label>State<input name="editTreeState" [(ngModel)]="editTreeForm.state" placeholder="e.g. Odisha" maxlength="100" required /></label>
+          </div>
+          <label>Country<input name="editTreeCountry" [(ngModel)]="editTreeForm.country" placeholder="e.g. India" maxlength="100" required /></label>
           @if (formError) { <p class="form-error">{{ formError }}</p> }
           <button class="button button-primary modal-submit" type="submit" [disabled]="saving">{{ saving ? 'Saving…' : 'Save family details' }} <span>→</span></button>
         </form>

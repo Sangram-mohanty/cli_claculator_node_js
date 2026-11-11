@@ -59,8 +59,11 @@ async function uploadPhoto(treeId, personId) {
 }
 
 test('full family workflow: create, relate, edit, unlink, delete', async () => {
-  const tree = await api('POST', '/trees', { name: 'Test Family', village: 'Bahadalapur', surname: 'Mohanty' });
+  const tree = await api('POST', '/trees', {
+    name: 'Test Family', village: 'Bahadalapur', district: 'Kendrapara', state: 'Odisha', country: 'India', surname: 'Mohanty'
+  });
   assert.equal(tree.status, 201);
+  assert.deepEqual([tree.body.district, tree.body.state, tree.body.country], ['Kendrapara', 'Odisha', 'India']);
   const treeId = tree.body._id;
 
   const add = async (name, extra = {}) => (await api('POST', `/trees/${treeId}/people`, { name, ...extra })).body;
@@ -210,7 +213,8 @@ test('only a signed-in admin can delete people, or rename or delete trees', asyn
 
   // Only the admin can rename a family.
   assert.equal((await api('PATCH', `/trees/${treeId}`, { name: 'Renamed' }, '')).status, 401);
-  const renamed = await api('PATCH', `/trees/${treeId}`, { name: 'Renamed', village: 'New Village', surname: 'New' });
+  const renamed = await api('PATCH', `/trees/${treeId}`, { name: 'Renamed', village: 'New Village', surname: 'New', state: 'Odisha', country: 'India' });
+  assert.deepEqual([renamed.body.state, renamed.body.country], ['Odisha', 'India']);
   assert.equal(renamed.status, 200);
   assert.deepEqual([renamed.body.name, renamed.body.village, renamed.body.surname], ['Renamed', 'New Village', 'New']);
   assert.equal((await api('PATCH', `/trees/${treeId}`, { name: '' })).status, 400);

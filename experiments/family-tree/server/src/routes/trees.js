@@ -61,6 +61,9 @@ router.post('/', async (req, res, next) => {
     const tree = await FamilyTree.create({
       name: req.body.name,
       village: req.body.village,
+      district: req.body.district,
+      state: req.body.state,
+      country: req.body.country,
       surname: req.body.surname
     });
     res.status(201).json(tree);
@@ -142,7 +145,7 @@ async function removePhotoFile(photoUrl) {
 router.patch('/:treeId', requireAdmin, async (req, res, next) => {
   try {
     const tree = await findTree(req.params.treeId);
-    for (const field of ['name', 'village', 'surname']) {
+    for (const field of ['name', 'village', 'district', 'state', 'country', 'surname']) {
       if (req.body[field] !== undefined) tree[field] = req.body[field];
     }
     await tree.save();

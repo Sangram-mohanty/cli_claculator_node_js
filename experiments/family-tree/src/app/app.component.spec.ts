@@ -133,7 +133,7 @@ describe('AppComponent', () => {
 
     it('only lets the admin edit the family name, pre-filled with the current details', () => {
       const component = TestBed.createComponent(AppComponent).componentInstance;
-      component.selectedTree = { _id: 't1', name: 'Mohanty Family', village: 'Bahadalapur', surname: 'Mohanty' };
+      component.selectedTree = { _id: 't1', name: 'Mohanty Family', village: 'Bahadalapur', surname: 'Mohanty', state: 'Odisha', country: 'India' };
 
       adminStub.isAdmin = false;
       component.openEditTree();
@@ -143,7 +143,10 @@ describe('AppComponent', () => {
       adminStub.isAdmin = true;
       component.openEditTree();
       expect(component.modalType).toBe('editTree');
-      expect(component.editTreeForm).toEqual({ name: 'Mohanty Family', village: 'Bahadalapur', surname: 'Mohanty' });
+      expect(component.editTreeForm).toEqual({
+        name: 'Mohanty Family', surname: 'Mohanty', village: 'Bahadalapur', district: '', state: 'Odisha', country: 'India'
+      });
+      expect(component.familyLocation(component.selectedTree!)).toBe('Bahadalapur, Odisha, India');
 
       component.editTreeForm.name = '   ';
       component.saveTree();

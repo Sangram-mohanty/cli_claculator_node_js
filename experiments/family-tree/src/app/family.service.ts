@@ -7,6 +7,9 @@ export interface FamilyTree {
   _id: string;
   name: string;
   village: string;
+  district?: string;
+  state?: string;
+  country?: string;
   surname: string;
 }
 
@@ -61,7 +64,7 @@ export class FamilyService {
     return this.http.post<FamilyTree>(`${this.apiUrl}/trees`, tree);
   }
 
-  /** Admin only: renames the family tree (name, village, surname). */
+  /** Admin only: edits the family's details (name, surname, and where they come from). */
   updateTree(treeId: string, tree: Omit<FamilyTree, '_id'>): Observable<FamilyTree> {
     return this.http.patch<FamilyTree>(`${this.apiUrl}/trees/${treeId}`, tree, { headers: this.admin.authHeaders() });
   }

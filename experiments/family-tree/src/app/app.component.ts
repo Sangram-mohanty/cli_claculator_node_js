@@ -52,10 +52,10 @@ export class AppComponent implements OnInit, OnDestroy {
   adminPassword = '';
   /** The family name typed to confirm deleting a whole family tree. */
   confirmTreeName = '';
-  editTreeForm = { name: '', village: '', surname: '' };
+  editTreeForm = { name: '', surname: '', village: '', district: '', state: '', country: '' };
   newPhoto: File | null = null;
   newPhotoPreview = '';
-  treeForm = { name: 'Bahadalapur Mohanty Family', village: 'Bahadalapur', surname: 'Mohanty' };
+  treeForm = { name: '', surname: '', village: '', district: '', state: '', country: '' };
   personForm: PersonInput = { name: '', gender: '', birthYear: null };
   readonly currentYear = new Date().getFullYear();
 
@@ -230,6 +230,8 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   openTreeForm(): void {
+    // Always start with an empty form for a new family.
+    this.treeForm = { name: '', surname: '', village: '', district: '', state: '', country: '' };
     this.formError = '';
     this.modalType = 'tree';
   }
@@ -318,23 +320,16 @@ export class AppComponent implements OnInit, OnDestroy {
       this.formError = 'Only an admin can edit the family name. Sign in as admin to continue.';
       return;
     }
-    const { name, village, surname } = this.selectedTree;
-    this.editTreeForm = { name, village, surname };
+    const { name, surname, village, district = '', state = '', country = '' } = this.selectedTree;
+    this.editTreeForm = { name, surname, village, district, state, country };
     this.formError = '';
     this.modalType = 'editTree';
   }
 
   saveTree(): void {
     if (!this.selectedTree) return;
-    const form = {
-      name: this.editTreeForm.name.trim(),
-      village: this.editTreeForm.village.trim(),
-      surname: this.editTreeForm.surname.trim()
-    };
-    if (!form.name || !form.village || !form.surname) {
-      this.formError = 'Please fill in the family name, village, and surname.';
-      return;
-    }
+    const form = this.cleanFamilyForm(this.editTreeForm);
+    if (!form) return;
     const treeId = this.selectedTree._id;
     this.saving = true;
     this.formError = '';
@@ -400,10 +395,33 @@ export class AppComponent implements OnInit, OnDestroy {
     });
   }
 
+  /** "Village, District, State, Country" for a family, skipping parts that are not filled in. */
+  familyLocation(tree: FamilyTree): string {
+    return [tree.village, tree.district, tree.state, tree.country].map((part) => part?.trim()).filter(Boolean).join(', ');
+  }
+
+  /** Trims the family form and checks every field is filled in; shows a message and returns null if not. */
+  private cleanFamilyForm(form: typeof this.treeForm): typeof this.treeForm | null {
+    const clean = {
+      name: form.name.trim(), surname: form.surname.trim(), village: form.village.trim(),
+      district: form.district.trim(), state: form.state.trim(), country: form.country.trim()
+    };
+    const missing = ([['family name', clean.name], ['surname', clean.surname], ['village', clean.village],
+      ['district', clean.district], ['state', clean.state], ['country', clean.country]] as const)
+      .filter(([, value]) => !value).map(([label]) => label);
+    if (missing.length) {
+      this.formError = `Please fill in the ${missing.length === 1 ? missing[0] : missing.slice(0, -1).join(', ') + ' and ' + missing[missing.length - 1]}.`;
+      return null;
+    }
+    return clean;
+  }
+
   createTree(): void {
+    const tree = this.cleanFamilyForm(this.treeForm);
+    if (!tree) return;
     this.saving = true;
     this.formError = '';
-    this.familyService.createTree(this.treeForm).subscribe({
+    this.familyService.createTree(tree).subscribe({
       next: (tree) => {
         this.trees = [...this.trees, tree];
         this.selectedTree = tree;

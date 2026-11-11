@@ -68,9 +68,28 @@ Tree routes are under `/api/v1/trees`. Admin sign-in is `POST /api/v1/admin/logi
 | POST | `/:treeId/relationships` | Link `{ parentId, childId }` |
 | DELETE | `/:treeId/relationships/:parentId/:childId` | Remove a parent-child link |
 
+## Keeping your data safe
+
+If MongoDB is not installed, run a local database that keeps its data permanently in `server/data/db`:
+
+```powershell
+cd server
+npm run db        # leave this window open; Ctrl+C stops it safely
+```
+
+Back up and restore everything (families, people, links, marriages) as JSON files in `server/backups/`:
+
+```powershell
+cd server
+npm run backup                                   # saves to backups/<date-time>/
+npm run restore -- backups/<folder> --replace    # loads a backup back in
+```
+
+`server/data/`, `server/backups/`, `server/uploads/` (photos) and `server/.env` are git-ignored, so family data and passwords are never pushed. Back them up separately.
+
 ## Design
 
-- `FamilyTree` stores the family name, village, and surname.
+- `FamilyTree` stores the family name, surname, and where the family comes from: village, district, state, and country.
 - `Person` stores each family member and optional profile details.
 - `Partnership` stores marriages between two people in the same tree.
 - `Relationship` stores directed parent-to-child links. The API checks that linked people belong to the same tree and rejects cycles. Sibling lists are derived from shared parents.
