@@ -1,0 +1,473 @@
+<div class="app-shell">
+  <aside class="sidebar">
+    <a class="brand" href="/" aria-label="Roots home">
+      <span class="brand-mark">R</span>
+      <span>roots<span class="brand-period">.</span></span>
+    </a>
+
+    <div class="sidebar-label">YOUR FAMILY</div>
+    @if (trees.length) {
+      @for (tree of trees; track tree._id) {
+        <button class="family-switcher" [class.family-active]="selectedTree?._id === tree._id" (click)="selectTree(tree)">
+          <span class="family-avatar">{{ initials(tree.name) }}</span>
+          <span class="family-switcher-copy">
+            <strong>{{ tree.name }}</strong>
+            <small>{{ tree.village }}</small>
+          </span>
+          @if (selectedTree?._id === tree._id) { <span class="chevron">⌄</span> }
+        </button>
+      }
+    } @else {
+      <p class="sidebar-empty">Your family tree will appear here.</p>
+    }
+
+    <div class="sidebar-label nav-label">WORKSPACE</div>
+    <button class="nav-item active"><span class="nav-icon">⌘</span> Family tree</button>
+    <button class="nav-item" (click)="openTreeForm()"><span class="nav-icon">＋</span> Create a family</button>
+
+    <div class="sidebar-bottom">
+      <div class="help-card">
+        <span class="help-icon">✳</span>
+        <strong>Every story matters.</strong>
+        <p>Bring your family’s history together, one person at a time.</p>
+      </div>
+      <div class="profile-row">
+        <span class="profile-avatar">M</span>
+        <span><strong>Family historian</strong><small>Personal workspace</small></span>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main-content">
+    <header class="topbar">
+      <div class="breadcrumbs"><span>Workspace</span><span class="crumb-slash">/</span><strong>{{ selectedTree?.name || 'Family tree' }}</strong></div>
+      <div class="topbar-actions">
+        <span class="privacy-pill"><span></span> Private family</span>
+        @if (admin.isAdmin) {
+          <span class="admin-pill" title="You can delete people">Admin</span>
+          <button type="button" class="admin-link" (click)="signOutAdmin()">Sign out</button>
+        } @else {
+          <button type="button" class="admin-link" (click)="openAdminLogin()">Admin sign in</button>
+        }
+      </div>
+    </header>
+
+    @if (notice) {
+      <div class="notice" role="status">
+        <span>{{ notice }}</span>
+        <button aria-label="Dismiss message" (click)="dismissNotice()">×</button>
+      </div>
+    }
+
+    @if (loading) {
+      <section class="empty-state"><div class="loader"></div><p>Gathering your family stories…</p></section>
+    } @else if (errorMessage) {
+      <section class="empty-state">
+        <div class="empty-icon">!</div>
+        <h1>We couldn’t load your family tree</h1>
+        <p>{{ errorMessage }}</p>
+        <button class="button button-primary" (click)="loadTrees()">Try again</button>
+        <small class="setup-hint">Make sure the API is running and MongoDB is available.</small>
+      </section>
+    } @else if (!selectedTree) {
+      <section class="welcome-layout">
+        <div class="welcome-copy">
+          <div class="eyebrow"><span class="eyebrow-line"></span> YOUR FAMILY, CONNECTED</div>
+          <h1>Every family has<br />a story worth <em>keeping.</em></h1>
+          <p>Start with the names you know. Add your parents, grandparents, brothers, sisters and children. Your family story can grow for generations.</p>
+          <button class="button button-primary button-large" (click)="openTreeForm()">Create your family tree <span>→</span></button>
+          <div class="welcome-footnote"><span>✦</span> Private by default. Yours to grow together.</div>
+        </div>
+        <div class="welcome-art" aria-hidden="true">
+          <div class="art-orbit orbit-one"></div><div class="art-orbit orbit-two"></div>
+          <div class="art-center"><span>Family</span><strong>roots</strong><i>✳</i></div>
+          <div class="art-node node-top"><span class="node-dot dot-sage"></span><span><b>Grandparents</b><small>Where the story begins</small></span></div>
+          <div class="art-node node-left"><span class="node-dot dot-coral"></span><span><b>Parents</b><small>The roots that hold us</small></span></div>
+          <div class="art-node node-right"><span class="node-dot dot-yellow"></span><span><b>Brothers & sisters</b><small>Growing up together</small></span></div>
+          <div class="art-node node-bottom"><span class="node-dot dot-blue"></span><span><b>Future generations</b><small>A story still unfolding</small></span></div>
+        </div>
+      </section>
+    } @else {
+      <section class="tree-page">
+        <div class="page-heading">
+          <div>
+            <div class="eyebrow"><span class="eyebrow-line"></span> YOUR FAMILY STORY</div>
+            <h1>{{ selectedTree.name }}</h1>
+            <p class="page-subtitle"><span class="location-icon">⌖</span> {{ selectedTree.village }} <span class="dot-separator">·</span> {{ selectedTree.surname }} family <span class="dot-separator">·</span> {{ people.length }} {{ people.length === 1 ? 'person' : 'people' }}</p>
+          </div>
+          <div class="heading-actions">
+            @if (admin.isAdmin) {
+              <button class="button button-secondary" (click)="openEditTree()">✎ Edit family</button>
+              <button class="button button-danger-ghost" (click)="openDeleteTree()">✕ Delete family</button>
+            }
+            <button class="button button-primary" (click)="openPersonForm('root')"><span class="button-plus">＋</span> Add a person</button>
+          </div>
+        </div>
+
+        @if (people.length === 0) {
+          <div class="first-person-card">
+            <div class="first-person-illustration"><span>✳</span><div class="illustration-stem"></div></div>
+            <div>
+              <span class="card-eyebrow">THE FIRST BRANCH</span>
+              <h2>Who should we add first?</h2>
+              <p>Start with yourself, a parent, or the oldest relative you know. You can connect everyone as your tree grows.</p>
+              <button class="button button-primary" (click)="openPersonForm('root')">Add the first person <span>→</span></button>
+            </div>
+          </div>
+        } @else {
+          <div class="tree-toolbar">
+            <div class="view-tabs" role="tablist" aria-label="Choose a view">
+              <button type="button" role="tab" [class.view-active]="view === 'branch'" [attr.aria-selected]="view === 'branch'" (click)="setView('branch')">Branch view</button>
+              <button type="button" role="tab" [class.view-active]="view === 'graph'" [attr.aria-selected]="view === 'graph'" (click)="setView('graph')">Family graph</button>
+            </div>
+            <div class="search-box">
+              <input type="search" name="search" [(ngModel)]="searchTerm" placeholder="Find a family member…" aria-label="Find a family member" />
+              @if (searchTerm.trim()) {
+                <div class="search-results">
+                  @for (person of searchResults; track person._id) {
+                    <button (click)="selectPerson(person)">
+                      <span class="person-photo search-photo">{{ person.photoUrl ? '' : initials(person.name) }}@if (person.photoUrl) { <img [src]="photoUrl(person.photoUrl)" [alt]="person.name" /> }</span>
+                      <span><strong>{{ person.name }}</strong><small>{{ person.birthYear || 'Year unknown' }}</small></span>
+                    </button>
+                  } @empty {
+                    <p>No one matches “{{ searchTerm.trim() }}”.</p>
+                  }
+                </div>
+              }
+            </div>
+          </div>
+          @if (view === 'graph') {
+            <app-family-graph [people]="people" [links]="relationships" [partners]="partnerships" [selectedId]="selectedPerson?._id ?? null"
+              [title]="selectedTree.surname + ' family'" [subtitle]="'of ' + selectedTree.village"
+              [photoUrl]="photoUrlFn" (personSelected)="openFromGraph($event)" />
+            <p class="graph-tip">Click anyone to open their branch, where you can add a father, mother, sibling, or child.</p>
+          } @else if (selectedPerson) {
+            <div class="branch-layout">
+            <div class="family-canvas">
+              <div class="generation-label"><span>01</span> PARENTS</div>
+              <div class="person-row">
+                @for (person of relatives.parents; track person._id) {
+                  <button class="person-card" [class.person-selected]="selectedPerson._id === person._id" (click)="selectPerson(person)">
+                    <span class="person-photo">{{ person.photoUrl ? '' : initials(person.name) }}@if (person.photoUrl) { <img [src]="photoUrl(person.photoUrl)" [alt]="person.name" /> }</span>
+                    <span class="person-copy"><strong>{{ person.name }}</strong><small>{{ person.gender === 'Man' ? 'Father' : person.gender === 'Woman' ? 'Mother' : 'Parent' }} · {{ person.birthYear || 'Year unknown' }}</small></span><span class="card-arrow">↗</span>
+                  </button>
+                }
+                @if (canAddFather) {
+                  <button class="add-relative-card" (click)="openPersonForm('father')"><span>＋</span><strong>Add father</strong><small>Name and photo</small></button>
+                }
+                @if (canAddMother) {
+                  <button class="add-relative-card" (click)="openPersonForm('mother')"><span>＋</span><strong>Add mother</strong><small>Name and photo</small></button>
+                }
+              </div>
+
+              <div class="generation-label generation-current"><span>02</span> {{ selectedTree.surname.toUpperCase() }} FAMILY</div>
+              <div class="person-row">
+                <div class="person-card focal-card person-selected">
+                  <span class="person-photo focal-photo">{{ selectedPerson.photoUrl ? '' : initials(selectedPerson.name) }}@if (selectedPerson.photoUrl) { <img [src]="photoUrl(selectedPerson.photoUrl)" [alt]="selectedPerson.name" /> }</span>
+                  <span class="person-copy"><strong>{{ selectedPerson.name }}</strong><small>{{ selectedPerson.birthYear || 'Year unknown' }} <span class="you-label">SELECTED</span></small></span>
+                  <span class="card-tools">
+                    <button type="button" class="card-edit" (click)="openEditForm()" [attr.aria-label]="'Edit ' + selectedPerson.name">✎ Edit</button>
+                    @if (admin.isAdmin) {
+                      <button type="button" class="card-delete" (click)="openDeleteConfirm()" [attr.aria-label]="'Delete ' + selectedPerson.name">✕ Delete</button>
+                    }
+                  </span>
+                </div>
+                @for (spouse of relatives.spouses; track spouse._id) {
+                  <span class="marriage-link" aria-hidden="true"></span>
+                  <button class="person-card spouse-card" (click)="selectPerson(spouse)">
+                    <span class="person-photo">{{ spouse.photoUrl ? '' : initials(spouse.name) }}@if (spouse.photoUrl) { <img [src]="photoUrl(spouse.photoUrl)" [alt]="spouse.name" /> }</span>
+                    <span class="person-copy"><strong>{{ spouse.name }}</strong><small>{{ spouseLabel(spouse) }} · {{ spouse.birthYear || 'Year unknown' }}</small></span><span class="card-arrow">↗</span>
+                  </button>
+                }
+                @if (!relatives.spouses.length) {
+                  <button class="add-relative-card compact-add spouse-add" (click)="openPersonForm('spouse')"><span>＋</span><strong>Add {{ spouseWord }}</strong></button>
+                }
+                @for (person of relatives.siblings; track person._id) {
+                  <button class="person-card" (click)="selectPerson(person)">
+                    <span class="person-photo">{{ person.photoUrl ? '' : initials(person.name) }}@if (person.photoUrl) { <img [src]="photoUrl(person.photoUrl)" [alt]="person.name" /> }</span>
+                    <span class="person-copy"><strong>{{ person.name }}</strong><small>{{ person.birthYear || 'Year unknown' }}</small></span><span class="card-arrow">↗</span>
+                  </button>
+                }
+                @if (relatives.parents.length) {
+                  <button class="add-relative-card compact-add" (click)="openPersonForm('sibling')"><span>＋</span><strong>Add sibling</strong></button>
+                }
+              </div>
+
+              <div class="generation-label generation-children"><span>03</span> CHILDREN</div>
+              <div class="person-row">
+                @for (person of relatives.children; track person._id) {
+                  <button class="person-card" (click)="selectPerson(person)">
+                    <span class="person-photo">{{ person.photoUrl ? '' : initials(person.name) }}@if (person.photoUrl) { <img [src]="photoUrl(person.photoUrl)" [alt]="person.name" /> }</span>
+                    <span class="person-copy"><strong>{{ person.name }}</strong><small>{{ person.birthYear || 'Year unknown' }}</small></span><span class="card-arrow">↗</span>
+                  </button>
+                } @empty {
+                  <button class="add-relative-card" (click)="openPersonForm('child')"><span>＋</span><strong>Add a child</strong><small>Continue the family story</small></button>
+                }
+                @if (relatives.children.length) {
+                  <button class="add-relative-card compact-add" (click)="openPersonForm('child')"><span>＋</span><strong>Add child</strong></button>
+                }
+              </div>
+            </div>
+            @if (detailOpen) {
+            <aside class="person-detail">
+              <div class="detail-heading"><span>PERSON DETAILS</span><button aria-label="Close details" (click)="detailOpen = false">×</button></div>
+              <div class="detail-profile">
+                <span class="detail-photo">{{ selectedPerson.photoUrl ? '' : initials(selectedPerson.name) }}@if (selectedPerson.photoUrl) { <img [src]="photoUrl(selectedPerson.photoUrl)" [alt]="selectedPerson.name" /> }</span>
+                <h2>{{ selectedPerson.name }}</h2>
+                <p>{{ selectedTree.surname }} family</p>
+                <div class="detail-quick-actions">
+                  <button type="button" class="quick-edit" (click)="openEditForm()">✎ Edit details</button>
+                  @if (admin.isAdmin) {
+                    <button type="button" class="quick-delete" (click)="openDeleteConfirm()">✕ Delete</button>
+                  }
+                  <label class="photo-upload">
+                    <input type="file" accept="image/png,image/jpeg,image/webp" (change)="uploadPhoto($event)" />
+                    <span>＋</span> {{ photoUploading ? 'Uploading…' : selectedPerson.photoUrl ? 'Change photo' : 'Add a photo' }}
+                  </label>
+                </div>
+              </div>
+              <div class="detail-divider"></div>
+              <div class="detail-facts"><span>Birth year</span><strong>{{ selectedPerson.birthYear || 'Not added' }}</strong></div>
+              <div class="detail-facts"><span>Gender</span><strong>{{ selectedPerson.gender || 'Not added' }}</strong></div>
+              <div class="detail-divider"></div>
+              <span class="detail-section-title">GROW THIS BRANCH</span>
+              <button class="detail-action" (click)="openPersonForm('father')" [disabled]="!canAddFather"><span class="action-icon">♂</span><span><strong>Add father</strong><small>{{ father ? father.name : canAddFather ? 'With a photo' : 'Two parents added' }}</small></span><b>›</b></button>
+              <button class="detail-action" (click)="openPersonForm('mother')" [disabled]="!canAddMother"><span class="action-icon">♀</span><span><strong>Add mother</strong><small>{{ mother ? mother.name : canAddMother ? 'With a photo' : 'Two parents added' }}</small></span><b>›</b></button>
+              <button class="detail-action" (click)="openPersonForm('spouse')"><span class="action-icon">♥</span><span><strong>Add {{ spouseWord }}</strong><small>{{ relatives.spouses.length ? 'Married to ' + relatives.spouses[0].name : 'Marriage' }}</small></span><b>›</b></button>
+              <button class="detail-action" (click)="openPersonForm('sibling')" [disabled]="!relatives.parents.length"><span class="action-icon">↔</span><span><strong>Add a sibling</strong><small>{{ relatives.parents.length ? 'Share a parent' : 'Add a parent first' }}</small></span><b>›</b></button>
+              <button class="detail-action" (click)="openPersonForm('child')"><span class="action-icon">↓</span><span><strong>Add a child</strong><small>Continue the next generation</small></span><b>›</b></button>
+
+              @if (relatives.parents.length || relatives.children.length || relatives.spouses.length) {
+                <span class="detail-section-title">CONNECTIONS</span>
+                @for (person of relatives.spouses; track person._id) {
+                  <div class="connection-row"><span><strong>{{ person.name }}</strong><small>{{ spouseLabel(person) }}</small></span><button (click)="unlink(person, 'spouse')" [attr.aria-label]="'Remove marriage to ' + person.name">Unlink</button></div>
+                }
+                @for (person of relatives.parents; track person._id) {
+                  <div class="connection-row"><span><strong>{{ person.name }}</strong><small>{{ person.gender === 'Man' ? 'Father' : person.gender === 'Woman' ? 'Mother' : 'Parent' }}</small></span><button (click)="unlink(person, 'parent')" [attr.aria-label]="'Remove link to ' + person.name">Unlink</button></div>
+                }
+                @for (person of relatives.children; track person._id) {
+                  <div class="connection-row"><span><strong>{{ person.name }}</strong><small>Child</small></span><button (click)="unlink(person, 'child')" [attr.aria-label]="'Remove link to ' + person.name">Unlink</button></div>
+                }
+              }
+
+              <div class="detail-divider"></div>
+              <div class="detail-manage">
+                <button class="button button-secondary" (click)="openEditForm()">Edit details</button>
+                @if (admin.isAdmin) {
+                  <button class="button button-danger-ghost" (click)="openDeleteConfirm()">Delete</button>
+                }
+              </div>
+            </aside>
+            }
+            </div>
+          }
+        }
+      </section>
+    }
+  </main>
+</div>
+
+@if (modalType) {
+  <div class="modal-backdrop" (click)="closeModal()">
+    <section class="modal-card" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+      <button class="modal-close" aria-label="Close" (click)="closeModal()">×</button>
+      @if (modalType === 'tree') {
+        <div class="modal-symbol">✳</div>
+        <div class="eyebrow"><span class="eyebrow-line"></span> A PLACE TO BEGIN</div>
+        <h2>Create your family tree</h2>
+        <p class="modal-intro">Give your family story a home. You can invite relatives later.</p>
+        <form (ngSubmit)="createTree()">
+          <label>Family name<input name="name" [(ngModel)]="treeForm.name" placeholder="e.g. Bahadalapur Mohanty Family" required /></label>
+          <div class="form-pair">
+            <label>Village<input name="village" [(ngModel)]="treeForm.village" placeholder="e.g. Bahadalapur" required /></label>
+            <label>Family surname<input name="surname" [(ngModel)]="treeForm.surname" placeholder="e.g. Mohanty" required /></label>
+          </div>
+          @if (formError) { <p class="form-error">{{ formError }}</p> }
+          <button class="button button-primary modal-submit" type="submit" [disabled]="saving">{{ saving ? 'Creating…' : 'Create family tree' }} <span>→</span></button>
+        </form>
+      } @else if (modalType === 'admin') {
+        <div class="modal-symbol">🔒</div>
+        <div class="eyebrow"><span class="eyebrow-line"></span> ADMIN</div>
+        <h2>Admin sign in</h2>
+        <p class="modal-intro">Only the admin can delete people from the family tree. Everyone can still add and edit.</p>
+        <form (ngSubmit)="signInAdmin()">
+          <label>Admin password<input name="adminPassword" type="password" autocomplete="current-password" [(ngModel)]="adminPassword" required /></label>
+          @if (formError) { <p class="form-error">{{ formError }}</p> }
+          <button class="button button-primary modal-submit" type="submit" [disabled]="saving">{{ saving ? 'Signing in…' : 'Sign in' }} <span>→</span></button>
+        </form>
+      } @else if (modalType === 'editTree' && selectedTree) {
+        <div class="modal-symbol">✎</div>
+        <div class="eyebrow"><span class="eyebrow-line"></span> EDIT FAMILY</div>
+        <h2>Edit family details</h2>
+        <p class="modal-intro">Change how this family is named across the app. People and connections are not affected.</p>
+        <form (ngSubmit)="saveTree()">
+          <label>Family name<input name="editTreeName" [(ngModel)]="editTreeForm.name" maxlength="100" required /></label>
+          <div class="form-pair">
+            <label>Village<input name="editTreeVillage" [(ngModel)]="editTreeForm.village" maxlength="100" required /></label>
+            <label>Family surname<input name="editTreeSurname" [(ngModel)]="editTreeForm.surname" maxlength="100" required /></label>
+          </div>
+          @if (formError) { <p class="form-error">{{ formError }}</p> }
+          <button class="button button-primary modal-submit" type="submit" [disabled]="saving">{{ saving ? 'Saving…' : 'Save family details' }} <span>→</span></button>
+        </form>
+      } @else if (modalType === 'deleteTree' && selectedTree) {
+        <div class="modal-symbol modal-symbol-danger">✕</div>
+        <div class="eyebrow"><span class="eyebrow-line"></span> DELETE FAMILY</div>
+        <h2>Delete {{ selectedTree.name }}?</h2>
+        <div class="delete-summary">
+          <div>
+            <p>This permanently deletes the whole family tree:</p>
+            <ul>
+              <li>{{ people.length }} {{ people.length === 1 ? 'person' : 'people' }} and all of their photos</li>
+              <li>every parent, child, and marriage link in this family</li>
+            </ul>
+            <p class="delete-keep">Other family trees are not affected. This cannot be undone.</p>
+          </div>
+        </div>
+        <form (ngSubmit)="deleteSelectedTree()">
+          <label>Type the family name to confirm: <strong>{{ selectedTree.name }}</strong>
+            <input name="confirmTreeName" [(ngModel)]="confirmTreeName" autocomplete="off" [placeholder]="selectedTree.name" />
+          </label>
+          @if (!confirmTreeName.trim()) {
+            <p class="confirm-hint">Type the family name above to turn on the <strong>Delete family</strong> button.</p>
+          } @else if (!treeNameConfirmed) {
+            <p class="confirm-hint confirm-bad">Doesn’t match yet. Type exactly: <strong>{{ selectedTree.name }}</strong></p>
+          } @else {
+            <p class="confirm-hint confirm-ok">✓ Name matches. You can now delete this family.</p>
+          }
+          @if (formError) { <p class="form-error">{{ formError }}</p> }
+          <div class="delete-buttons">
+            <button type="button" class="button button-secondary" (click)="closeModal()" [disabled]="saving">Cancel</button>
+            <button type="submit" class="button button-danger" [disabled]="saving || !treeNameConfirmed">{{ saving ? 'Deleting…' : 'Delete family' }}</button>
+          </div>
+        </form>
+      } @else if (modalType === 'delete' && selectedPerson) {
+        <div class="modal-symbol modal-symbol-danger">✕</div>
+        <div class="eyebrow"><span class="eyebrow-line"></span> DELETE PERSON</div>
+        <h2>Delete {{ selectedPerson.name }}?</h2>
+        <div class="delete-summary">
+          <span class="person-photo delete-photo">{{ selectedPerson.photoUrl ? '' : initials(selectedPerson.name) }}@if (selectedPerson.photoUrl) { <img [src]="photoUrl(selectedPerson.photoUrl)" [alt]="selectedPerson.name" /> }</span>
+          <div>
+            <p>This permanently removes {{ selectedPerson.name }} from the family tree.</p>
+            @if (deleteImpact.length) {
+              <p class="delete-also">It also removes:</p>
+              <ul>
+                @for (line of deleteImpact; track line) { <li>{{ line }}</li> }
+              </ul>
+            }
+            <p class="delete-keep">Other family members stay in the tree. This cannot be undone.</p>
+          </div>
+        </div>
+        @if (formError) { <p class="form-error">{{ formError }}</p> }
+        <div class="delete-buttons">
+          <button type="button" class="button button-secondary" (click)="closeModal()" [disabled]="saving">Cancel</button>
+          <button type="button" class="button button-danger" (click)="deleteSelectedPerson()" [disabled]="saving">{{ saving ? 'Deleting…' : 'Yes, delete' }}</button>
+        </div>
+      } @else if (modalType === 'edit') {
+        <div class="modal-symbol">✎</div>
+        <div class="eyebrow"><span class="eyebrow-line"></span> EDIT DETAILS</div>
+        <h2>{{ selectedPerson?.name }}</h2>
+        <p class="modal-intro">Correct a name or add details you’ve learned.</p>
+        <form (ngSubmit)="updatePerson()">
+          <div class="photo-picker">
+            <span class="picker-preview">
+              @if (editPhotoPreview) { <img [src]="editPhotoPreview" alt="Photo preview" /> } @else { <span>{{ personForm.name.trim() ? initials(personForm.name) : '＋' }}</span> }
+            </span>
+            <span class="picker-copy">
+              <strong>Photo</strong>
+              <small>{{ newPhoto ? 'New photo will be saved' : removeCurrentPhoto ? 'Photo will be removed' : 'JPEG, PNG, or WebP up to 5 MB' }}</small>
+              <span class="picker-actions">
+                <label class="picker-button">
+                  <input type="file" accept="image/png,image/jpeg,image/webp" (change)="chooseNewPhoto($event)" />
+                  {{ editPhotoPreview ? 'Change photo' : 'Choose photo' }}
+                </label>
+                @if (editPhotoPreview) { <button type="button" class="picker-remove" (click)="markPhotoForRemoval()">Remove</button> }
+              </span>
+            </span>
+          </div>
+          <label>Full name<input name="personName" [(ngModel)]="personForm.name" placeholder="First and last name" required /></label>
+          <div class="form-pair">
+            <label>Birth year <span class="optional">(optional)</span><input name="birthYear" type="number" min="1000" [max]="currentYear" [(ngModel)]="personForm.birthYear" placeholder="e.g. 1950" /></label>
+            <label>Gender <span class="optional">(optional)</span><select name="gender" [(ngModel)]="personForm.gender"><option value="">Not specified</option><option value="Woman">Woman</option><option value="Man">Man</option><option value="Other">Other</option></select></label>
+          </div>
+          @if (formError) { <p class="form-error">{{ formError }}</p> }
+          <button class="button button-primary modal-submit" type="submit" [disabled]="saving">{{ saving ? 'Saving…' : 'Save changes' }} <span>→</span></button>
+          @if (admin.isAdmin) {
+            <button type="button" class="modal-delete-link" (click)="openDeleteConfirm()" [disabled]="saving">✕ Delete this person</button>
+          }
+        </form>
+      } @else {
+        <div class="modal-symbol">✳</div>
+        <div class="eyebrow"><span class="eyebrow-line"></span> {{ relationLabel.toUpperCase() }}</div>
+        <h2>Add {{ relationLabel.toLowerCase() }}</h2>
+        <p class="modal-intro">
+          @if (personRole !== 'root' && selectedPerson) { Connected to <strong>{{ selectedPerson.name }}</strong>. }
+          Every name helps bring your family story to life.
+        </p>
+        @if (personRole !== 'root' && linkCandidates.length) {
+          <div class="mode-toggle" role="tablist">
+            <button type="button" role="tab" [class.mode-active]="personMode === 'new'" [attr.aria-selected]="personMode === 'new'" (click)="personMode = 'new'; formError = ''">New person</button>
+            <button type="button" role="tab" [class.mode-active]="personMode === 'existing'" [attr.aria-selected]="personMode === 'existing'" (click)="personMode = 'existing'; formError = ''">Already in the tree</button>
+          </div>
+        }
+        @if (personMode === 'existing' && personRole !== 'root') {
+          <form (ngSubmit)="createPerson()">
+            <label>Family member<select name="existingPerson" [(ngModel)]="existingPersonId" required>
+              <option value="">Choose a person…</option>
+              @for (person of linkCandidates; track person._id) {
+                <option [value]="person._id">{{ person.name }}{{ person.birthYear ? ' (' + person.birthYear + ')' : '' }}</option>
+              }
+            </select></label>
+            @if (personRole === 'child' && relatives.spouses.length) {
+              <label>Other parent<select name="otherParent" [(ngModel)]="otherParentId">
+                @for (spouse of relatives.spouses; track spouse._id) {
+                  <option [value]="spouse._id">{{ spouse.name }} ({{ spouseLabel(spouse).toLowerCase() }})</option>
+                }
+                <option value="">Only {{ selectedPerson?.name }}</option>
+              </select></label>
+            }
+            @if (formError) { <p class="form-error">{{ formError }}</p> }
+            <button class="button button-primary modal-submit" type="submit" [disabled]="saving">{{ saving ? 'Saving…' : 'Connect' }} <span>→</span></button>
+          </form>
+        } @else {
+        <form (ngSubmit)="createPerson()">
+          <div class="photo-picker">
+            <span class="picker-preview">
+              @if (newPhotoPreview) { <img [src]="newPhotoPreview" alt="Selected photo preview" /> } @else { <span>{{ personForm.name.trim() ? initials(personForm.name) : '＋' }}</span> }
+            </span>
+            <span class="picker-copy">
+              <strong>Photo <span class="optional">(optional)</span></strong>
+              <small>JPEG, PNG, or WebP up to 5 MB</small>
+              <span class="picker-actions">
+                <label class="picker-button">
+                  <input type="file" accept="image/png,image/jpeg,image/webp" (change)="chooseNewPhoto($event)" />
+                  {{ newPhoto ? 'Change photo' : 'Choose photo' }}
+                </label>
+                @if (newPhoto) { <button type="button" class="picker-remove" (click)="clearNewPhoto()">Remove</button> }
+              </span>
+            </span>
+          </div>
+          <label>Full name<input name="personName" [(ngModel)]="personForm.name" placeholder="First and last name" required /></label>
+          <div class="form-pair">
+            <label>Birth year <span class="optional">(optional)</span><input name="birthYear" type="number" min="1000" [max]="currentYear" [(ngModel)]="personForm.birthYear" placeholder="e.g. 1950" /></label>
+            @if (roleGender) {
+              <label>Gender<input name="fixedGender" [value]="roleGender" disabled /></label>
+            } @else {
+              <label>Gender <span class="optional">(optional)</span><select name="gender" [(ngModel)]="personForm.gender"><option value="">Not specified</option><option value="Woman">Woman</option><option value="Man">Man</option><option value="Other">Other</option></select></label>
+            }
+          </div>
+          @if (personRole === 'child' && relatives.spouses.length) {
+            <label>Other parent<select name="otherParent" [(ngModel)]="otherParentId">
+              @for (spouse of relatives.spouses; track spouse._id) {
+                <option [value]="spouse._id">{{ spouse.name }} ({{ spouseLabel(spouse).toLowerCase() }})</option>
+              }
+              <option value="">Only {{ selectedPerson?.name }}</option>
+            </select></label>
+          }
+          @if (formError) { <p class="form-error">{{ formError }}</p> }
+          <button class="button button-primary modal-submit" type="submit" [disabled]="saving">{{ saving ? (newPhoto ? 'Saving and uploading…' : 'Saving…') : 'Add to family tree' }} <span>→</span></button>
+        </form>
+        }
+      }
+    </section>
+  </div>
+}

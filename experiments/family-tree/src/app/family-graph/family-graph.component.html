@@ -1,0 +1,50 @@
+<div class="graph-controls">
+  <span class="graph-summary">{{ layout.nodes.length }} {{ layout.nodes.length === 1 ? 'person' : 'people' }} · {{ layout.generations }} {{ layout.generations === 1 ? 'generation' : 'generations' }}</span>
+  <div class="zoom-buttons">
+    <button type="button" (click)="zoomOut()" aria-label="Zoom out">−</button>
+    <span>{{ (scale * 100).toFixed(0) }}%</span>
+    <button type="button" (click)="zoomIn()" aria-label="Zoom in">+</button>
+    <button type="button" class="fit-button" (click)="fit()">Fit</button>
+  </div>
+</div>
+
+<div class="parchment" #viewport>
+  <header class="parchment-header">
+    <div class="parchment-title">
+      @if (title) { <h2>{{ title }}</h2> }
+      @if (subtitle) { <p>{{ subtitle }}</p> }
+    </div>
+    <ul class="parchment-legend" aria-label="Legend">
+      <li><i class="swatch swatch-blood"></i> Siblings / bloodline</li>
+      <li><i class="swatch swatch-marriage"></i> Marriage</li>
+    </ul>
+  </header>
+
+  <div class="graph-sizer" [style.width.px]="layout.width * scale" [style.height.px]="layout.height * scale">
+    <div class="graph-stage" [style.width.px]="layout.width" [style.height.px]="layout.height" [style.transform]="'scale(' + scale + ')'">
+      <svg class="graph-lines" [attr.width]="layout.width" [attr.height]="layout.height" [attr.viewBox]="'0 0 ' + layout.width + ' ' + layout.height" aria-hidden="true">
+        @for (edge of layout.edges; track $index) {
+          <path [attr.d]="edge.d" [class]="'edge-' + edge.kind" />
+        }
+      </svg>
+      @for (node of layout.nodes; track node.person._id) {
+        <button type="button" class="portrait-node"
+          [class.portrait-selected]="node.person._id === selectedId"
+          [style.left.px]="node.x" [style.top.px]="node.y" [style.width.px]="nodeWidth" [style.height.px]="nodeHeight"
+          (click)="personSelected.emit(node.person._id)" [attr.aria-label]="'Open ' + node.person.name">
+          <span class="portrait-frame" [style.width.px]="photoSize" [style.height.px]="photoSize">
+            <span class="portrait-photo">
+              @if (node.person.photoUrl) {
+                <img [src]="photoUrl(node.person.photoUrl)" [alt]="node.person.name" />
+              } @else {
+                <span class="portrait-initials">{{ initials(node.person.name) }}</span>
+              }
+            </span>
+          </span>
+          <span class="portrait-name" [title]="node.person.name">{{ node.person.name }}</span>
+          @if (node.person.birthYear) { <span class="portrait-year">b. {{ node.person.birthYear }}</span> }
+        </button>
+      }
+    </div>
+  </div>
+</div>
