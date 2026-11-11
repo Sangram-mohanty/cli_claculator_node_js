@@ -10,10 +10,13 @@ let mongo;
 let server;
 let baseUrl;
 let mongoose;
+let adminToken = '';
+const ADMIN_PASSWORD = 'test-admin-password';
 
 test.before(async () => {
   uploadDir = await mkdtemp(path.join(os.tmpdir(), 'family-tree-uploads-'));
   process.env.UPLOAD_DIR = uploadDir;
+  process.env.ADMIN_PASSWORD = ADMIN_PASSWORD;
   const { MongoMemoryServer } = require('mongodb-memory-server');
   mongoose = require('mongoose');
   mongo = await MongoMemoryServer.create();
@@ -22,6 +25,7 @@ test.before(async () => {
   server = app.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
   baseUrl = `http://127.0.0.1:${server.address().port}/api/v1`;
+  adminToken = (await api('POST', '/admin/login', { password: ADMIN_PASSWORD }, '')).body.token;
 });
 
 test.after(async () => {
@@ -31,10 +35,13 @@ test.after(async () => {
   await rm(uploadDir, { recursive: true, force: true });
 });
 
-async function api(method, url, body) {
+/** Calls the API; requests are made as the signed-in admin unless another token ('' for none) is given. */
+async function api(method, url, body, token = adminToken) {
+  const headers = body ? { 'Content-Type': 'application/json' } : {};
+  if (token) headers.Authorization = `Bearer ${token}`;
   const response = await fetch(`${baseUrl}${url}`, {
     method,
-    headers: body ? { 'Content-Type': 'application/json' } : {},
+    headers,
     body: body ? JSON.stringify(body) : undefined
   });
   const text = await response.text();
@@ -71,6 +78,10 @@ test('full family workflow: create, relate, edit, unlink, delete', async () => {
   const cycle = await api('POST', `/trees/${treeId}/relationships`, { parentId: me._id, childId: grandpa._id });
   assert.equal(cycle.status, 400);
 
+  const links = (await api('GET', `/trees/${treeId}/relationships`)).body;
+  assert.equal(links.length, 3);
+  assert.ok(links.some((link) => link.parentId === dad._id && link.childId === me._id));
+
   let relatives = (await api('GET', `/trees/${treeId}/people/${dad._id}/relatives`)).body;
   assert.deepEqual(relatives.parents.map((p) => p.name), ['Grandpa']);
   assert.deepEqual(relatives.siblings.map((p) => p.name), ['Aunt']);
@@ -102,6 +113,39 @@ test('full family workflow: create, relate, edit, unlink, delete', async () => {
   assert.deepEqual(people.map((p) => p.name), ['Aunt', 'Grandfather', 'Me']);
 });
 
+test('marriages: add, list, show as spouses, validate, and remove', async () => {
+  const treeId = (await api('POST', '/trees', { name: 'Wed', village: 'V', surname: 'S' })).body._id;
+  const add = async (name, gender) => (await api('POST', `/trees/${treeId}/people`, { name, gender })).body;
+  const husband = await add('Husband', 'Man');
+  const wife = await add('Wife', 'Woman');
+  const son = await add('Son', 'Man');
+
+  const married = await api('POST', `/trees/${treeId}/partnerships`, { personId: husband._id, partnerId: wife._id });
+  assert.equal(married.status, 201);
+  // The same couple in the other order is a duplicate.
+  assert.equal((await api('POST', `/trees/${treeId}/partnerships`, { personId: wife._id, partnerId: husband._id })).status, 409);
+  assert.equal((await api('POST', `/trees/${treeId}/partnerships`, { personId: wife._id, partnerId: wife._id })).status, 400);
+
+  const list = (await api('GET', `/trees/${treeId}/partnerships`)).body;
+  assert.equal(list.length, 1);
+  assert.deepEqual([list[0].personA, list[0].personB].sort(), [husband._id, wife._id].sort());
+
+  assert.deepEqual((await api('GET', `/trees/${treeId}/people/${husband._id}/relatives`)).body.spouses.map((p) => p.name), ['Wife']);
+  assert.deepEqual((await api('GET', `/trees/${treeId}/people/${wife._id}/relatives`)).body.spouses.map((p) => p.name), ['Husband']);
+
+  // Spouses cannot be linked as parent and child, and a parent cannot marry their child.
+  assert.equal((await api('POST', `/trees/${treeId}/relationships`, { parentId: husband._id, childId: wife._id })).status, 400);
+  await api('POST', `/trees/${treeId}/relationships`, { parentId: husband._id, childId: son._id });
+  assert.equal((await api('POST', `/trees/${treeId}/partnerships`, { personId: son._id, partnerId: husband._id })).status, 400);
+
+  // Removing works in either order; deleting a person removes their marriages.
+  assert.equal((await api('DELETE', `/trees/${treeId}/partnerships/${wife._id}/${husband._id}`)).status, 204);
+  assert.equal((await api('DELETE', `/trees/${treeId}/partnerships/${wife._id}/${husband._id}`)).status, 404);
+  await api('POST', `/trees/${treeId}/partnerships`, { personId: husband._id, partnerId: wife._id });
+  await api('DELETE', `/trees/${treeId}/people/${wife._id}`);
+  assert.deepEqual((await api('GET', `/trees/${treeId}/partnerships`)).body, []);
+});
+
 test('replacing a photo removes the old file', async () => {
   const treeId = (await api('POST', '/trees', { name: 'Photo Family', village: 'V', surname: 'S' })).body._id;
   const person = (await api('POST', `/trees/${treeId}/people`, { name: 'Pic' })).body;
@@ -111,6 +155,12 @@ test('replacing a photo removes the old file', async () => {
   const after = (await readdir(uploadDir)).filter((file) => !before.has(file));
   assert.equal(after.length, 1);
   assert.equal(second.body.person.photoUrl, `/uploads/${after[0]}`);
+
+  // Removing the photo clears it and deletes the file.
+  const removed = await api('DELETE', `/trees/${treeId}/people/${person._id}/photo`);
+  assert.equal(removed.status, 200);
+  assert.equal(removed.body.person.photoUrl, '');
+  assert.deepEqual((await readdir(uploadDir)).filter((file) => !before.has(file)), []);
 });
 
 test('people from another tree cannot be edited or linked', async () => {
@@ -136,4 +186,43 @@ test('deleting a tree removes its people and relationships', async () => {
   const Relationship = require('../src/models/Relationship');
   assert.equal(await Person.countDocuments({ treeId }), 0);
   assert.equal(await Relationship.countDocuments({ treeId }), 0);
+});
+
+test('only a signed-in admin can delete people, or rename or delete trees', async () => {
+  const treeId = (await api('POST', '/trees', { name: 'Guarded', village: 'V', surname: 'S' })).body._id;
+  const person = (await api('POST', `/trees/${treeId}/people`, { name: 'Keep me' }, '')).body;
+
+  // Not signed in, or a forged/garbled token: refused, and the person is still there.
+  assert.equal((await api('DELETE', `/trees/${treeId}/people/${person._id}`, undefined, '')).status, 401);
+  assert.equal((await api('DELETE', `/trees/${treeId}/people/${person._id}`, undefined, 'abc.def')).status, 401);
+  const forged = adminToken.split('.')[0] + '.' + 'x'.repeat(43);
+  assert.equal((await api('DELETE', `/trees/${treeId}/people/${person._id}`, undefined, forged)).status, 401);
+  assert.equal((await api('DELETE', `/trees/${treeId}`, undefined, '')).status, 401);
+  assert.equal((await api('GET', `/trees/${treeId}/people`)).body.length, 1);
+
+  // Everyone else can still add and edit.
+  assert.equal((await api('PATCH', `/trees/${treeId}/people/${person._id}`, { name: 'Edited' }, '')).status, 200);
+
+  // Wrong password is rejected; session reports admin status.
+  assert.equal((await api('POST', '/admin/login', { password: 'wrong' }, '')).status, 401);
+  assert.deepEqual((await api('GET', '/admin/session', undefined, '')).body.admin, false);
+  assert.deepEqual((await api('GET', '/admin/session')).body.admin, true);
+
+  // Only the admin can rename a family.
+  assert.equal((await api('PATCH', `/trees/${treeId}`, { name: 'Renamed' }, '')).status, 401);
+  const renamed = await api('PATCH', `/trees/${treeId}`, { name: 'Renamed', village: 'New Village', surname: 'New' });
+  assert.equal(renamed.status, 200);
+  assert.deepEqual([renamed.body.name, renamed.body.village, renamed.body.surname], ['Renamed', 'New Village', 'New']);
+  assert.equal((await api('PATCH', `/trees/${treeId}`, { name: '' })).status, 400);
+
+  // The admin can delete.
+  assert.equal((await api('DELETE', `/trees/${treeId}/people/${person._id}`)).status, 204);
+  assert.equal((await api('DELETE', `/trees/${treeId}`)).status, 204);
+});
+
+test('admin tokens expire and are tied to the signing secret', () => {
+  const { issueToken, verifyToken } = require('../src/auth/admin');
+  const { token } = issueToken(Date.now() - 13 * 60 * 60 * 1000);
+  assert.equal(verifyToken(token), null);
+  assert.ok(verifyToken(issueToken().token));
 });

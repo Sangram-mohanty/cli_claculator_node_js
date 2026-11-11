@@ -3,6 +3,7 @@ const cors = require('cors');
 const multer = require('multer');
 const path = require('node:path');
 const treeRoutes = require('./routes/trees');
+const admin = require('./auth/admin');
 
 const app = express();
 const uploadDirectory = path.resolve(process.env.UPLOAD_DIR || 'uploads');
@@ -22,6 +23,8 @@ app.use('/uploads', express.static(uploadDirectory, {
 app.get('/api/v1/health', (req, res) => {
   res.json({ status: 'ok' });
 });
+app.post('/api/v1/admin/login', admin.login);
+app.get('/api/v1/admin/session', admin.session);
 app.use('/api/v1/trees', treeRoutes);
 
 app.use((req, res) => {

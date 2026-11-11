@@ -7,7 +7,9 @@ const path = require('node:path');
 const FamilyTree = require('../models/FamilyTree');
 const Person = require('../models/Person');
 const Relationship = require('../models/Relationship');
+const Partnership = require('../models/Partnership');
 const { createsCycle } = require('../utils/relationshipGraph');
+const { requireAdmin } = require('../auth/admin');
 
 const router = express.Router();
 const upload = multer({
@@ -99,22 +101,25 @@ router.get('/:treeId/people/:personId/relatives', async (req, res, next) => {
     const person = await Person.findOne({ _id: personId, treeId });
     if (!person) throw notFound('Person');
 
-    const [parentLinks, childLinks] = await Promise.all([
+    const [parentLinks, childLinks, partnerships] = await Promise.all([
       Relationship.find({ treeId, childId: personId }),
-      Relationship.find({ treeId, parentId: personId })
+      Relationship.find({ treeId, parentId: personId }),
+      Partnership.find({ treeId, $or: [{ personA: personId }, { personB: personId }] })
     ]);
+    const spouseIds = partnerships.map((link) => String(link.personA) === String(personId) ? link.personB : link.personA);
     const parentIds = parentLinks.map((link) => link.parentId);
     const childIds = childLinks.map((link) => link.childId);
     const siblingLinks = parentIds.length
       ? await Relationship.find({ treeId, parentId: { $in: parentIds }, childId: { $ne: personId } })
       : [];
     const siblingIds = [...new Set(siblingLinks.map((link) => String(link.childId)))];
-    const [parents, siblings, children] = await Promise.all([
+    const [parents, siblings, children, spouses] = await Promise.all([
       Person.find({ _id: { $in: parentIds }, treeId }).sort({ name: 1 }),
       Person.find({ _id: { $in: siblingIds }, treeId }).sort({ name: 1 }),
-      Person.find({ _id: { $in: childIds }, treeId }).sort({ name: 1 })
+      Person.find({ _id: { $in: childIds }, treeId }).sort({ name: 1 }),
+      Person.find({ _id: { $in: spouseIds }, treeId }).sort({ name: 1 })
     ]);
-    res.json({ person, parents, siblings, children });
+    res.json({ person, parents, siblings, children, spouses });
   } catch (error) {
     next(error);
   }
@@ -134,7 +139,7 @@ async function removePhotoFile(photoUrl) {
   await unlink(path.join(uploadDirectory, filename)).catch(() => {});
 }
 
-router.patch('/:treeId', async (req, res, next) => {
+router.patch('/:treeId', requireAdmin, async (req, res, next) => {
   try {
     const tree = await findTree(req.params.treeId);
     for (const field of ['name', 'village', 'surname']) {
@@ -147,12 +152,13 @@ router.patch('/:treeId', async (req, res, next) => {
   }
 });
 
-router.delete('/:treeId', async (req, res, next) => {
+router.delete('/:treeId', requireAdmin, async (req, res, next) => {
   try {
     const tree = await findTree(req.params.treeId);
     const people = await Person.find({ treeId: tree._id }).select('photoUrl');
     await Promise.all([
       Relationship.deleteMany({ treeId: tree._id }),
+      Partnership.deleteMany({ treeId: tree._id }),
       Person.deleteMany({ treeId: tree._id })
     ]);
     await tree.deleteOne();
@@ -176,16 +182,101 @@ router.patch('/:treeId/people/:personId', async (req, res, next) => {
   }
 });
 
-router.delete('/:treeId/people/:personId', async (req, res, next) => {
+router.delete('/:treeId/people/:personId', requireAdmin, async (req, res, next) => {
   try {
     const person = await findPerson(req.params.treeId, req.params.personId);
-    await Relationship.deleteMany({
-      treeId: person.treeId,
-      $or: [{ parentId: person._id }, { childId: person._id }]
-    });
+    await Promise.all([
+      Relationship.deleteMany({
+        treeId: person.treeId,
+        $or: [{ parentId: person._id }, { childId: person._id }]
+      }),
+      Partnership.deleteMany({
+        treeId: person.treeId,
+        $or: [{ personA: person._id }, { personB: person._id }]
+      })
+    ]);
     await person.deleteOne();
     await removePhotoFile(person.photoUrl);
     res.status(204).end();
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/:treeId/partnerships', async (req, res, next) => {
+  try {
+    await findTree(req.params.treeId);
+    res.json(await Partnership.find({ treeId: req.params.treeId }).select('personA personB type'));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/:treeId/partnerships', async (req, res, next) => {
+  try {
+    const { treeId } = req.params;
+    const { personId, partnerId, type } = req.body;
+    await findTree(treeId);
+    requireObjectId(personId, 'Person ID');
+    requireObjectId(partnerId, 'Partner ID');
+    if (String(personId) === String(partnerId)) {
+      return res.status(400).json({ error: 'A person cannot be married to themselves.' });
+    }
+    const [person, partner] = await Promise.all([
+      Person.findOne({ _id: personId, treeId }),
+      Person.findOne({ _id: partnerId, treeId })
+    ]);
+    if (!person || !partner) {
+      return res.status(400).json({ error: 'Both people must exist in this family tree.' });
+    }
+    const directLink = await Relationship.exists({
+      treeId,
+      $or: [{ parentId: personId, childId: partnerId }, { parentId: partnerId, childId: personId }]
+    });
+    if (directLink) {
+      return res.status(400).json({ error: 'A parent and child cannot be married.' });
+    }
+    const [personA, personB] = Partnership.orderedPair(personId, partnerId);
+    const partnership = await Partnership.create({ treeId, personA, personB, type });
+    return res.status(201).json(partnership);
+  } catch (error) {
+    if (error.code === 11000) return res.status(409).json({ error: 'These two people are already married.' });
+    return next(error);
+  }
+});
+
+router.delete('/:treeId/partnerships/:personId/:partnerId', async (req, res, next) => {
+  try {
+    const { treeId, personId, partnerId } = req.params;
+    await findTree(treeId);
+    requireObjectId(personId, 'Person ID');
+    requireObjectId(partnerId, 'Partner ID');
+    const [personA, personB] = Partnership.orderedPair(personId, partnerId);
+    const result = await Partnership.deleteOne({ treeId, personA, personB });
+    if (!result.deletedCount) throw notFound('Marriage');
+    res.status(204).end();
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/:treeId/relationships', async (req, res, next) => {
+  try {
+    await findTree(req.params.treeId);
+    res.json(await Relationship.find({ treeId: req.params.treeId }).select('parentId childId type'));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.delete('/:treeId/people/:personId/photo', async (req, res, next) => {
+  try {
+    const person = await findPerson(req.params.treeId, req.params.personId);
+    const previousPhoto = person.photoUrl;
+    person.photoUrl = '';
+    await person.save();
+    await removePhotoFile(previousPhoto);
+    res.json({ person });
   } catch (error) {
     next(error);
   }
@@ -222,6 +313,11 @@ router.post('/:treeId/relationships', async (req, res, next) => {
     ]);
     if (!parent || !child) {
       return res.status(400).json({ error: 'Both people must exist in this family tree.' });
+    }
+
+    const [personA, personB] = Partnership.orderedPair(parentId, childId);
+    if (await Partnership.exists({ treeId, personA, personB })) {
+      return res.status(400).json({ error: 'Married partners cannot also be parent and child.' });
     }
 
     const relationships = await Relationship.find({ treeId }).select('parentId childId');

@@ -1,25 +1,35 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Observable, throwError } from 'rxjs';
-import { FamilyService, FamilyTree, Person, PersonInput, PersonRelatives } from './family.service';
+import { Observable, catchError, forkJoin, of, switchMap, throwError } from 'rxjs';
+import { FamilyService, FamilyTree, Partnership, Person, PersonInput, PersonRelatives, Relationship } from './family.service';
+import { FamilyGraphComponent } from './family-graph/family-graph.component';
+import { AdminService } from './admin.service';
 
-type ModalType = 'tree' | 'person' | 'edit' | null;
+type ModalType = 'tree' | 'editTree' | 'person' | 'edit' | 'delete' | 'deleteTree' | 'admin' | null;
 type PersonMode = 'new' | 'existing';
-type PersonRole = 'root' | 'parent' | 'child' | 'sibling';
+type PersonRole = 'root' | 'father' | 'mother' | 'spouse' | 'child' | 'sibling';
+type ViewMode = 'branch' | 'graph';
+
+const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+
+function emptyRelatives(): PersonRelatives {
+  return { person: null, parents: [], siblings: [], children: [], spouses: [] };
+}
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, FamilyGraphComponent],
   templateUrl: './app.component.html',
   styleUrl: './app.component.css'
 })
-export class AppComponent implements OnInit {
+export class AppComponent implements OnInit, OnDestroy {
   trees: FamilyTree[] = [];
   selectedTree: FamilyTree | null = null;
   people: Person[] = [];
   selectedPerson: Person | null = null;
-  relatives: PersonRelatives = { person: null, parents: [], siblings: [], children: [] };
+  relatives: PersonRelatives = emptyRelatives();
   modalType: ModalType = null;
   personRole: PersonRole = 'root';
   loading = true;
@@ -29,18 +39,81 @@ export class AppComponent implements OnInit {
   notice = '';
   formError = '';
   detailOpen = true;
-  confirmingDelete = false;
   searchTerm = '';
   personMode: PersonMode = 'new';
   existingPersonId = '';
+  view: ViewMode = 'branch';
+  relationships: Relationship[] = [];
+  partnerships: Partnership[] = [];
+  /** When adding a child, the selected person's spouse who is the child's other parent ('' for none). */
+  otherParentId = '';
+  /** Set in the edit form when the person's current photo should be deleted on save. */
+  removeCurrentPhoto = false;
+  adminPassword = '';
+  /** The family name typed to confirm deleting a whole family tree. */
+  confirmTreeName = '';
+  editTreeForm = { name: '', village: '', surname: '' };
+  newPhoto: File | null = null;
+  newPhotoPreview = '';
   treeForm = { name: 'Bahadalapur Mohanty Family', village: 'Bahadalapur', surname: 'Mohanty' };
   personForm: PersonInput = { name: '', gender: '', birthYear: null };
   readonly currentYear = new Date().getFullYear();
 
-  constructor(private readonly familyService: FamilyService) {}
+  constructor(private readonly familyService: FamilyService, readonly admin: AdminService) {}
 
   ngOnInit(): void {
     this.loadTrees();
+    this.admin.checkSession().subscribe();
+  }
+
+  openAdminLogin(): void {
+    this.formError = '';
+    this.adminPassword = '';
+    this.modalType = 'admin';
+  }
+
+  signInAdmin(): void {
+    if (!this.adminPassword) {
+      this.formError = 'Enter the admin password.';
+      return;
+    }
+    this.saving = true;
+    this.formError = '';
+    this.admin.login(this.adminPassword).subscribe({
+      next: () => {
+        this.saving = false;
+        this.adminPassword = '';
+        this.modalType = null;
+        this.showNotice('Signed in as admin. You can now delete people, and edit or delete families.');
+      },
+      error: (error) => {
+        this.saving = false;
+        this.formError = this.apiError(error, 'Admin sign-in failed.');
+      }
+    });
+  }
+
+  signOutAdmin(): void {
+    this.admin.logout();
+    if (this.modalType === 'delete') this.modalType = null;
+    this.showNotice('Signed out of admin.');
+  }
+
+  ngOnDestroy(): void {
+    this.clearNewPhoto();
+  }
+
+  setView(view: ViewMode): void {
+    this.view = view;
+    if (view === 'graph') this.loadGraph();
+  }
+
+  /** Clicking someone in the graph opens their branch. */
+  openFromGraph(personId: string): void {
+    const person = this.people.find((candidate) => candidate._id === personId);
+    if (!person) return;
+    this.view = 'branch';
+    this.selectPerson(person);
   }
 
   loadTrees(): void {
@@ -69,9 +142,11 @@ export class AppComponent implements OnInit {
     if (this.selectedTree?._id !== tree._id) {
       this.selectedPerson = null;
       this.searchTerm = '';
+      this.relationships = [];
+      this.partnerships = [];
     }
     this.selectedTree = tree;
-    this.relatives = { person: null, parents: [], siblings: [], children: [] };
+    this.relatives = emptyRelatives();
     this.loading = true;
     this.familyService.getPeople(tree._id).subscribe({
       next: (people) => {
@@ -80,6 +155,7 @@ export class AppComponent implements OnInit {
         this.selectedPerson = current ?? people[0] ?? null;
         this.loading = false;
         if (this.selectedPerson) this.loadRelatives(this.selectedPerson);
+        if (this.view === 'graph') this.loadGraph();
       },
       error: (error) => {
         this.errorMessage = this.apiError(error, 'People in this family could not be loaded.');
@@ -91,7 +167,6 @@ export class AppComponent implements OnInit {
   selectPerson(person: Person): void {
     this.selectedPerson = person;
     this.detailOpen = true;
-    this.confirmingDelete = false;
     this.searchTerm = '';
     this.loadRelatives(person);
   }
@@ -106,13 +181,52 @@ export class AppComponent implements OnInit {
   get linkCandidates(): Person[] {
     const selectedId = this.selectedPerson?._id;
     const related = new Set([
-      ...this.relatives.parents, ...this.relatives.siblings, ...this.relatives.children
+      ...this.relatives.parents, ...this.relatives.siblings, ...this.relatives.children, ...this.relatives.spouses
     ].map((person) => person._id));
-    return this.people.filter((person) => person._id !== selectedId && !related.has(person._id));
+    const requiredGender = this.roleGender;
+    return this.people.filter((person) => person._id !== selectedId && !related.has(person._id)
+      && (!requiredGender || !person.gender || person.gender === requiredGender));
   }
 
   get canAddSibling(): boolean {
     return this.relatives.parents.length > 0;
+  }
+
+  get father(): Person | undefined {
+    return this.relatives.parents.find((parent) => parent.gender === 'Man');
+  }
+
+  get mother(): Person | undefined {
+    return this.relatives.parents.find((parent) => parent.gender === 'Woman');
+  }
+
+  get canAddFather(): boolean {
+    return !this.father && this.relatives.parents.length < 2;
+  }
+
+  get canAddMother(): boolean {
+    return !this.mother && this.relatives.parents.length < 2;
+  }
+
+  /** Father and mother forms fix the gender, and a wife or husband is the opposite of the selected person. */
+  get roleGender(): string {
+    if (this.personRole === 'father') return 'Man';
+    if (this.personRole === 'mother') return 'Woman';
+    if (this.personRole === 'spouse') {
+      const gender = this.selectedPerson?.gender;
+      return gender === 'Man' ? 'Woman' : gender === 'Woman' ? 'Man' : '';
+    }
+    return '';
+  }
+
+  /** "wife", "husband", or "spouse", depending on the selected person's gender. */
+  get spouseWord(): string {
+    const gender = this.selectedPerson?.gender;
+    return gender === 'Man' ? 'wife' : gender === 'Woman' ? 'husband' : 'spouse';
+  }
+
+  spouseLabel(spouse: Person): string {
+    return spouse.gender === 'Woman' ? 'Wife' : spouse.gender === 'Man' ? 'Husband' : 'Spouse';
   }
 
   openTreeForm(): void {
@@ -122,12 +236,41 @@ export class AppComponent implements OnInit {
 
   openPersonForm(role: PersonRole): void {
     if (role === 'sibling' && !this.canAddSibling) return;
+    if (role === 'father' && !this.canAddFather) return;
+    if (role === 'mother' && !this.canAddMother) return;
     this.formError = '';
     this.personRole = role;
     this.personMode = 'new';
     this.existingPersonId = '';
-    this.personForm = { name: '', gender: '', birthYear: null };
+    this.personForm = { name: '', gender: this.roleGender, birthYear: null };
+    this.otherParentId = role === 'child' && this.relatives.spouses.length === 1 ? this.relatives.spouses[0]._id : '';
+    this.clearNewPhoto();
     this.modalType = 'person';
+  }
+
+  chooseNewPhoto(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    if (!PHOTO_TYPES.includes(file.type)) {
+      this.formError = 'Choose a JPEG, PNG, or WebP photo.';
+      return;
+    }
+    if (file.size > MAX_PHOTO_BYTES) {
+      this.formError = 'Photo must be 5 MB or smaller.';
+      return;
+    }
+    this.formError = '';
+    this.clearNewPhoto();
+    this.newPhoto = file;
+    this.newPhotoPreview = URL.createObjectURL(file);
+  }
+
+  clearNewPhoto(): void {
+    if (this.newPhotoPreview) URL.revokeObjectURL(this.newPhotoPreview);
+    this.newPhoto = null;
+    this.newPhotoPreview = '';
   }
 
   openEditForm(): void {
@@ -138,15 +281,123 @@ export class AppComponent implements OnInit {
       gender: this.selectedPerson.gender ?? '',
       birthYear: this.selectedPerson.birthYear ?? null
     };
+    this.clearNewPhoto();
+    this.removeCurrentPhoto = false;
     this.modalType = 'edit';
   }
 
+  /** The photo shown in the edit form: a newly chosen one, the current one, or none if it is being removed. */
+  get editPhotoPreview(): string {
+    if (this.newPhotoPreview) return this.newPhotoPreview;
+    const current = this.selectedPerson?.photoUrl;
+    return current && !this.removeCurrentPhoto ? this.photoUrl(current) : '';
+  }
+
+  markPhotoForRemoval(): void {
+    this.clearNewPhoto();
+    this.removeCurrentPhoto = true;
+  }
+
   closeModal(): void {
-    if (!this.saving) this.modalType = null;
+    if (this.saving) return;
+    this.modalType = null;
+    this.clearNewPhoto();
   }
 
   get relationLabel(): string {
-    return ({ root: 'A family member', parent: 'A parent', child: 'A child', sibling: 'A sibling' })[this.personRole];
+    return ({
+      root: 'A family member', father: 'A father', mother: 'A mother', spouse: `A ${this.spouseWord}`,
+      child: 'A child', sibling: 'A sibling'
+    })[this.personRole];
+  }
+
+  openEditTree(): void {
+    if (!this.selectedTree) return;
+    if (!this.admin.isAdmin) {
+      this.openAdminLogin();
+      this.formError = 'Only an admin can edit the family name. Sign in as admin to continue.';
+      return;
+    }
+    const { name, village, surname } = this.selectedTree;
+    this.editTreeForm = { name, village, surname };
+    this.formError = '';
+    this.modalType = 'editTree';
+  }
+
+  saveTree(): void {
+    if (!this.selectedTree) return;
+    const form = {
+      name: this.editTreeForm.name.trim(),
+      village: this.editTreeForm.village.trim(),
+      surname: this.editTreeForm.surname.trim()
+    };
+    if (!form.name || !form.village || !form.surname) {
+      this.formError = 'Please fill in the family name, village, and surname.';
+      return;
+    }
+    const treeId = this.selectedTree._id;
+    this.saving = true;
+    this.formError = '';
+    this.familyService.updateTree(treeId, form).subscribe({
+      next: (tree) => {
+        this.saving = false;
+        this.modalType = null;
+        this.trees = this.trees.map((existing) => existing._id === treeId ? tree : existing);
+        if (this.selectedTree?._id === treeId) this.selectedTree = tree;
+        this.showNotice('The family details were updated.');
+      },
+      error: (error) => {
+        this.saving = false;
+        if (error?.status === 401) this.admin.logout();
+        this.formError = this.apiError(error, 'The family details could not be saved.');
+      }
+    });
+  }
+
+  openDeleteTree(): void {
+    if (!this.selectedTree) return;
+    if (!this.admin.isAdmin) {
+      this.openAdminLogin();
+      this.formError = 'Only an admin can delete a family. Sign in as admin to continue.';
+      return;
+    }
+    this.formError = '';
+    this.confirmTreeName = '';
+    this.modalType = 'deleteTree';
+  }
+
+  get treeNameConfirmed(): boolean {
+    // Ignore capital letters and extra spaces so only the words themselves have to match.
+    const normalize = (value: string) => value.trim().replace(/\s+/g, ' ').toLowerCase();
+    return !!this.selectedTree && normalize(this.confirmTreeName) === normalize(this.selectedTree.name);
+  }
+
+  deleteSelectedTree(): void {
+    if (!this.selectedTree || !this.treeNameConfirmed) return;
+    const removed = this.selectedTree;
+    this.saving = true;
+    this.formError = '';
+    this.familyService.deleteTree(removed._id).subscribe({
+      next: () => {
+        this.saving = false;
+        this.modalType = null;
+        this.confirmTreeName = '';
+        this.trees = this.trees.filter((tree) => tree._id !== removed._id);
+        this.selectedTree = null;
+        this.selectedPerson = null;
+        this.people = [];
+        this.relationships = [];
+        this.partnerships = [];
+        this.relatives = emptyRelatives();
+        this.showNotice(`The ${removed.name} family tree was deleted.`);
+        if (this.trees.length) this.selectTree(this.trees[0]);
+      },
+      error: (error) => {
+        this.saving = false;
+        if (error?.status === 401) this.admin.logout();
+        this.formError = this.apiError(error, 'This family could not be deleted.');
+      }
+    });
   }
 
   createTree(): void {
@@ -157,6 +408,8 @@ export class AppComponent implements OnInit {
         this.trees = [...this.trees, tree];
         this.selectedTree = tree;
         this.people = [];
+        this.relationships = [];
+        this.partnerships = [];
         this.selectedPerson = null;
         this.modalType = null;
         this.saving = false;
@@ -181,13 +434,25 @@ export class AppComponent implements OnInit {
     this.saving = true;
     this.formError = '';
     const treeId = this.selectedTree._id;
-    this.familyService.createPerson(treeId, this.personForm).subscribe({
+    const photo = this.newPhoto;
+    const isParent = this.personRole === 'father' || this.personRole === 'mother' || this.personRole === 'spouse';
+    this.familyService.createPerson(treeId, { ...this.personForm, gender: this.roleGender || this.personForm.gender }).subscribe({
       next: (person) => {
+        // After adding a father, mother, or spouse, stay on the selected person so they can keep building.
+        const focusId = isParent && this.selectedPerson ? this.selectedPerson._id : person._id;
         this.linkPerson(treeId, person._id).subscribe({
           next: () => {
-            this.modalType = null;
-            this.saving = false;
-            this.refreshPeople(person._id);
+            if (!photo) {
+              this.finishPersonForm(focusId);
+              return;
+            }
+            this.familyService.uploadPhoto(treeId, person._id, photo).subscribe({
+              next: () => this.finishPersonForm(focusId),
+              error: (error) => {
+                this.finishPersonForm(focusId);
+                this.showNotice(`${person.name} was added, but the photo could not be uploaded: ${this.apiError(error, 'unknown error')}`);
+              }
+            });
           },
           error: (error) => {
             this.formError = this.apiError(error, 'The person was created, but the family link could not be saved.');
@@ -203,6 +468,13 @@ export class AppComponent implements OnInit {
     });
   }
 
+  private finishPersonForm(focusId: string): void {
+    this.modalType = null;
+    this.saving = false;
+    this.clearNewPhoto();
+    this.refreshPeople(focusId);
+  }
+
   updatePerson(): void {
     if (!this.selectedTree || !this.selectedPerson) return;
     if (!this.personForm.name.trim()) {
@@ -211,10 +483,20 @@ export class AppComponent implements OnInit {
     }
     this.saving = true;
     this.formError = '';
-    this.familyService.updatePerson(this.selectedTree._id, this.selectedPerson._id, this.personForm).subscribe({
+    const treeId = this.selectedTree._id;
+    const personId = this.selectedPerson._id;
+    const photo = this.newPhoto;
+    const removePhoto = this.removeCurrentPhoto && !photo && !!this.selectedPerson.photoUrl;
+    this.familyService.updatePerson(treeId, personId, this.personForm).pipe(
+      switchMap((person) => photo
+        ? this.familyService.uploadPhoto(treeId, personId, photo)
+        : removePhoto ? this.familyService.removePhoto(treeId, personId) : of(person))
+    ).subscribe({
       next: (person) => {
         this.modalType = null;
         this.saving = false;
+        this.clearNewPhoto();
+        this.removeCurrentPhoto = false;
         this.refreshPeople(person._id);
       },
       error: (error) => {
@@ -224,34 +506,66 @@ export class AppComponent implements OnInit {
     });
   }
 
+  /** Opens the delete confirmation for the selected person (also reachable from the edit form). */
+  openDeleteConfirm(): void {
+    if (!this.selectedPerson) return;
+    if (!this.admin.isAdmin) {
+      this.openAdminLogin();
+      this.formError = 'Only an admin can delete people. Sign in as admin to continue.';
+      return;
+    }
+    this.formError = '';
+    this.modalType = 'delete';
+  }
+
+  /** Plain-language list of the links that deleting the selected person also removes. */
+  get deleteImpact(): string[] {
+    const r = this.relatives;
+    const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+    const lines: string[] = [];
+    if (r.parents.length) lines.push(`${count(r.parents.length, 'link', 'links')} to parents (${r.parents.map((p) => p.name).join(', ')})`);
+    if (r.spouses.length) lines.push(`${count(r.spouses.length, 'marriage', 'marriages')} (${r.spouses.map((p) => p.name).join(', ')})`);
+    if (r.children.length) lines.push(`${count(r.children.length, 'link', 'links')} to children (${r.children.map((p) => p.name).join(', ')})`);
+    if (this.selectedPerson?.photoUrl) lines.push('their photo');
+    return lines;
+  }
+
   deleteSelectedPerson(): void {
     if (!this.selectedTree || !this.selectedPerson) return;
     const removed = this.selectedPerson;
-    const fallback = this.relatives.parents[0] ?? this.relatives.children[0] ?? this.relatives.siblings[0];
+    const fallback = this.relatives.spouses[0] ?? this.relatives.parents[0] ?? this.relatives.children[0] ?? this.relatives.siblings[0];
     this.saving = true;
+    this.formError = '';
     this.familyService.deletePerson(this.selectedTree._id, removed._id).subscribe({
       next: () => {
         this.saving = false;
-        this.confirmingDelete = false;
+        this.modalType = null;
         this.selectedPerson = null;
         this.showNotice(`${removed.name} was removed from the family tree.`);
         this.refreshPeople(fallback?._id ?? '');
       },
       error: (error) => {
         this.saving = false;
-        this.showNotice(this.apiError(error, 'This person could not be removed.'));
+        if (error?.status === 401) this.admin.logout();
+        this.formError = this.apiError(error, 'This person could not be deleted.');
       }
     });
   }
 
-  unlink(relative: Person, relation: 'parent' | 'child'): void {
+  unlink(relative: Person, relation: 'parent' | 'child' | 'spouse'): void {
     if (!this.selectedTree || !this.selectedPerson) return;
     const selected = this.selectedPerson;
-    const [parentId, childId] = relation === 'parent'
-      ? [relative._id, selected._id]
-      : [selected._id, relative._id];
-    this.familyService.removeRelationship(this.selectedTree._id, parentId, childId).subscribe({
-      next: () => this.loadRelatives(selected),
+    const treeId = this.selectedTree._id;
+    const request$ = relation === 'spouse'
+      ? this.familyService.removePartnership(treeId, selected._id, relative._id)
+      : relation === 'parent'
+        ? this.familyService.removeRelationship(treeId, relative._id, selected._id)
+        : this.familyService.removeRelationship(treeId, selected._id, relative._id);
+    request$.subscribe({
+      next: () => {
+        this.loadRelatives(selected);
+        if (this.view === 'graph') this.loadGraph();
+      },
       error: (error) => this.showNotice(this.apiError(error, 'The connection could not be removed.'))
     });
   }
@@ -283,6 +597,8 @@ export class AppComponent implements OnInit {
     return this.familyService.photoUrl(path);
   }
 
+  readonly photoUrlFn = (path: string) => this.familyService.photoUrl(path);
+
   initials(name: string): string {
     return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0].toUpperCase()).join('');
   }
@@ -310,7 +626,14 @@ export class AppComponent implements OnInit {
     const focusId = this.selectedPerson?._id ?? this.existingPersonId;
     this.saving = true;
     this.formError = '';
-    this.linkPerson(treeId, this.existingPersonId).subscribe({
+    const existing = this.people.find((person) => person._id === this.existingPersonId);
+    const gender = this.roleGender;
+    const setGender$: Observable<unknown> = existing && gender && !existing.gender
+      ? this.familyService.updatePerson(treeId, existing._id, {
+        name: existing.name, gender, birthYear: existing.birthYear ?? null
+      })
+      : of(null);
+    setGender$.pipe(switchMap(() => this.linkPerson(treeId, this.existingPersonId))).subscribe({
       next: () => {
         this.modalType = null;
         this.saving = false;
@@ -327,8 +650,24 @@ export class AppComponent implements OnInit {
   private linkPerson(treeId: string, personId: string): Observable<unknown> {
     const selectedId = this.selectedPerson?._id;
     if (this.personRole === 'root' || !selectedId) return this.familyService.getPeople(treeId);
-    if (this.personRole === 'parent') return this.familyService.addRelationship(treeId, personId, selectedId);
-    if (this.personRole === 'child') return this.familyService.addRelationship(treeId, selectedId, personId);
+    if (this.personRole === 'father' || this.personRole === 'mother') {
+      // If the other parent is already known, record the two parents as married.
+      const otherParent = this.relatives.parents.find((parent) => parent._id !== personId);
+      const alreadyMarried = otherParent && this.partnerships.some((pair) =>
+        (pair.personA === otherParent._id && pair.personB === personId) || (pair.personB === otherParent._id && pair.personA === personId));
+      const link$ = this.familyService.addRelationship(treeId, personId, selectedId);
+      if (!otherParent || alreadyMarried || this.relatives.parents.length !== 1) return link$;
+      // The marriage is a convenience; if it already exists (or fails), keep the parent link that was saved.
+      return link$.pipe(switchMap(() => this.familyService.addPartnership(treeId, otherParent._id, personId)
+        .pipe(catchError(() => of(null)))));
+    }
+    if (this.personRole === 'spouse') return this.familyService.addPartnership(treeId, selectedId, personId);
+    if (this.personRole === 'child') {
+      const link$ = this.familyService.addRelationship(treeId, selectedId, personId);
+      const otherParentId = this.otherParentId;
+      if (!otherParentId) return link$;
+      return link$.pipe(switchMap(() => this.familyService.addRelationship(treeId, otherParentId, personId)));
+    }
     const parentIds = this.relatives.parents.map((parent) => parent._id);
     if (!parentIds.length) return throwError(() => new Error('Add a parent before adding a sibling.'));
     return this.familyService.addRelationships(treeId, parentIds, personId);
@@ -338,8 +677,22 @@ export class AppComponent implements OnInit {
     this.notice = message;
   }
 
+  private loadGraph(): void {
+    if (!this.selectedTree) return;
+    const treeId = this.selectedTree._id;
+    forkJoin([this.familyService.getRelationships(treeId), this.familyService.getPartnerships(treeId)]).subscribe({
+      next: ([relationships, partnerships]) => {
+        if (this.selectedTree?._id !== treeId) return;
+        this.relationships = relationships;
+        this.partnerships = partnerships;
+      },
+      error: (error) => this.showNotice(this.apiError(error, 'The family graph could not be loaded.'))
+    });
+  }
+
   private refreshPeople(focusId: string): void {
     if (!this.selectedTree) return;
+    if (this.view === 'graph') this.loadGraph();
     this.familyService.getPeople(this.selectedTree._id).subscribe({
       next: (people) => {
         this.people = people;
@@ -350,7 +703,7 @@ export class AppComponent implements OnInit {
           this.selectPerson(next);
         } else {
           this.selectedPerson = null;
-          this.relatives = { person: null, parents: [], siblings: [], children: [] };
+          this.relatives = emptyRelatives();
         }
       },
       error: (error) => {
