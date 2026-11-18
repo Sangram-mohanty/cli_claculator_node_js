@@ -52,7 +52,7 @@ export interface PersonRelatives {
 
 @Injectable({ providedIn: 'root' })
 export class FamilyService {
-  private readonly apiUrl = 'http://localhost:3000/api/v1';
+  private readonly apiUrl = '/api/v1';
 
   constructor(private readonly http: HttpClient, private readonly admin: AdminService) {}
 

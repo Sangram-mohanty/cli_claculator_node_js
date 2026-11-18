@@ -10,7 +10,7 @@ const STORAGE_KEY = 'roots-admin-token';
  */
 @Injectable({ providedIn: 'root' })
 export class AdminService {
-  private readonly apiUrl = 'http://localhost:3000/api/v1/admin';
+  private readonly apiUrl = '/api/v1/admin';
   private token = '';
 
   constructor(private readonly http: HttpClient) {
