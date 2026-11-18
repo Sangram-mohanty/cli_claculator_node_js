@@ -1,0 +1,11 @@
+{
+  "createdAt": "2026-11-11T10:07:09.107Z",
+  "database": "family_tree",
+  "counts": {
+    "familytrees": 1,
+    "relationships": 31,
+    "partnerships": 6,
+    "users": 0,
+    "people": 30
+  }
+}

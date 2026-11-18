@@ -1,0 +1,23 @@
+[
+  {
+    "_id": {
+      "$oid": "6af41cad4416cd3e7d2e2730"
+    },
+    "name": "Bahadalapur Mohanty Family",
+    "village": "Bahadalapur",
+    "surname": "Mohanty",
+    "createdAt": {
+      "$date": {
+        "$numberLong": "1794383021814"
+      }
+    },
+    "updatedAt": {
+      "$date": {
+        "$numberLong": "1794383021814"
+      }
+    },
+    "__v": {
+      "$numberInt": "0"
+    }
+  }
+]

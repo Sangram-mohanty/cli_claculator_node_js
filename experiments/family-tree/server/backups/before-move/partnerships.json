@@ -1,0 +1,170 @@
+[
+  {
+    "_id": {
+      "$oid": "6af42636ac7d1ca854b9b684"
+    },
+    "treeId": {
+      "$oid": "6af41cad4416cd3e7d2e2730"
+    },
+    "personA": {
+      "$oid": "6af41d014416cd3e7d2e2756"
+    },
+    "personB": {
+      "$oid": "6af42636ac7d1ca854b9b67e"
+    },
+    "type": "married",
+    "createdAt": {
+      "$date": {
+        "$numberLong": "1794385462725"
+      }
+    },
+    "updatedAt": {
+      "$date": {
+        "$numberLong": "1794385462725"
+      }
+    },
+    "__v": {
+      "$numberInt": "0"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "6af42686ac7d1ca854b9b6d1"
+    },
+    "treeId": {
+      "$oid": "6af41cad4416cd3e7d2e2730"
+    },
+    "personA": {
+      "$oid": "6af4265dac7d1ca854b9b6a0"
+    },
+    "personB": {
+      "$oid": "6af42686ac7d1ca854b9b6cb"
+    },
+    "type": "married",
+    "createdAt": {
+      "$date": {
+        "$numberLong": "1794385542062"
+      }
+    },
+    "updatedAt": {
+      "$date": {
+        "$numberLong": "1794385542062"
+      }
+    },
+    "__v": {
+      "$numberInt": "0"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "6af42940ac7d1ca854b9b9a8"
+    },
+    "treeId": {
+      "$oid": "6af41cad4416cd3e7d2e2730"
+    },
+    "personA": {
+      "$oid": "6af42876ac7d1ca854b9b8bf"
+    },
+    "personB": {
+      "$oid": "6af42940ac7d1ca854b9b9a2"
+    },
+    "type": "married",
+    "createdAt": {
+      "$date": {
+        "$numberLong": "1794386240923"
+      }
+    },
+    "updatedAt": {
+      "$date": {
+        "$numberLong": "1794386240923"
+      }
+    },
+    "__v": {
+      "$numberInt": "0"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "6af429beac7d1ca854b9ba3a"
+    },
+    "treeId": {
+      "$oid": "6af41cad4416cd3e7d2e2730"
+    },
+    "personA": {
+      "$oid": "6af428eeac7d1ca854b9b94a"
+    },
+    "personB": {
+      "$oid": "6af429beac7d1ca854b9ba34"
+    },
+    "type": "married",
+    "createdAt": {
+      "$date": {
+        "$numberLong": "1794386366583"
+      }
+    },
+    "updatedAt": {
+      "$date": {
+        "$numberLong": "1794386366583"
+      }
+    },
+    "__v": {
+      "$numberInt": "0"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "6af42a2aac7d1ca854b9ba91"
+    },
+    "treeId": {
+      "$oid": "6af41cad4416cd3e7d2e2730"
+    },
+    "personA": {
+      "$oid": "6af42908ac7d1ca854b9b960"
+    },
+    "personB": {
+      "$oid": "6af42a2aac7d1ca854b9ba8b"
+    },
+    "type": "married",
+    "createdAt": {
+      "$date": {
+        "$numberLong": "1794386474499"
+      }
+    },
+    "updatedAt": {
+      "$date": {
+        "$numberLong": "1794386474499"
+      }
+    },
+    "__v": {
+      "$numberInt": "0"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "6af42aa1ac7d1ca854b9bb04"
+    },
+    "treeId": {
+      "$oid": "6af41cad4416cd3e7d2e2730"
+    },
+    "personA": {
+      "$oid": "6af42a7eac7d1ca854b9badb"
+    },
+    "personB": {
+      "$oid": "6af42aa1ac7d1ca854b9bafe"
+    },
+    "type": "married",
+    "createdAt": {
+      "$date": {
+        "$numberLong": "1794386593877"
+      }
+    },
+    "updatedAt": {
+      "$date": {
+        "$numberLong": "1794386593877"
+      }
+    },
+    "__v": {
+      "$numberInt": "0"
+    }
+  }
+]

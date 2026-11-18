@@ -1,0 +1,19 @@
+services: 
+  backend: 
+     build: ./server
+     container_name: express-backend 
+     env_file:
+         - ./server/.env
+     expose:
+         - "3000"
+     mem_limit: 350m
+     restart: unless-stopped
+  frontend: 
+     build: ./client
+     container_name: angular-frontend
+     ports:
+         - "80:80"
+     depends_on:
+         - backend
+     mem_limit: 128m  
+     restart: unless-stopped

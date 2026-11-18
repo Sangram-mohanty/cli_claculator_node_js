@@ -1,0 +1,870 @@
+[
+  {
+    "_id": {
+      "$oid": "6af41cee4416cd3e7d2e274a"
+    },
+    "treeId": {
+      "$oid": "6af41cad4416cd3e7d2e2730"
+    },
+    "parentId": {
+      "$oid": "6af41cee4416cd3e7d2e2744"
+    },
+    "childId": {
+      "$oid": "6af41cc94416cd3e7d2e2734"
+    },
+    "type": "biological",
+    "createdAt": {
+      "$date": {
+        "$numberLong": "1794383086428"
+      }
+    },
+    "updatedAt": {
+      "$date": {
+        "$numberLong": "1794383086428"
+      }
+    },
+    "__v": {
+      "$numberInt": "0"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "6af41d014416cd3e7d2e275c"
+    },
+    "treeId": {
+      "$oid": "6af41cad4416cd3e7d2e2730"
+    },
+    "parentId": {
+      "$oid": "6af41d014416cd3e7d2e2756"
+    },
+    "childId": {
+      "$oid": "6af41cee4416cd3e7d2e2744"
+    },
+    "type": "biological",
+    "createdAt": {
+      "$date": {
+        "$numberLong": "1794383105075"
+      }
+    },
+    "updatedAt": {
+      "$date": {
+        "$numberLong": "1794383105075"
+      }
+    },
+    "__v": {
+      "$numberInt": "0"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "6af41d194416cd3e7d2e276e"
+    },
+    "treeId": {
+      "$oid": "6af41cad4416cd3e7d2e2730"
+    },
+    "parentId": {
+      "$oid": "6af41d194416cd3e7d2e2768"
+    },
+    "childId": {
+      "$oid": "6af41d014416cd3e7d2e2756"
+    },
+    "type": "biological",
+    "createdAt": {
+      "$date": {
+        "$numberLong": "1794383129881"
+      }
+    },
+    "updatedAt": {
+      "$date": {
+        "$numberLong": "1794383129881"
+      }
+    },
+    "__v": {
+      "$numberInt": "0"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "6af41d3c4416cd3e7d2e2780"
+    },
+    "treeId": {
+      "$oid": "6af41cad4416cd3e7d2e2730"
+    },
+    "parentId": {
+      "$oid": "6af41d3c4416cd3e7d2e277a"
+    },
+    "childId": {
+      "$oid": "6af41d194416cd3e7d2e2768"
+    },
+    "type": "biological",
+    "createdAt": {
+      "$date": {
+        "$numberLong": "1794383164414"
+      }
+    },
+    "updatedAt": {
+      "$date": {
+        "$numberLong": "1794383164414"
+      }
+    },
+    "__v": {
+      "$numberInt": "0"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "6af420dda29987c835c98685"
+    },
+    "treeId": {
+      "$oid": "6af41cad4416cd3e7d2e2730"
+    },
+    "parentId": {
+      "$oid": "6af420dda29987c835c9867f"
+    },
+    "childId": {
+      "$oid": "6af41cc94416cd3e7d2e2734"
+    },
+    "type": "biological",
+    "createdAt": {
+      "$date": {
+        "$numberLong": "1794384093844"
+      }
+    },
+    "updatedAt": {
+      "$date": {
+        "$numberLong": "1794384093844"
+      }
+    },
+    "__v": {
+      "$numberInt": "0"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "6af4265dac7d1ca854b9b6a7"
+    },
+    "treeId": {
+      "$oid": "6af41cad4416cd3e7d2e2730"
+    },
+    "parentId": {
+      "$oid": "6af42636ac7d1ca854b9b67e"
+    },
+    "childId": {
+      "$oid": "6af4265dac7d1ca854b9b6a0"
+    },
+    "type": "biological",
+    "createdAt": {
+      "$date": {
+        "$numberLong": "1794385501660"
+      }
+    },
+    "updatedAt": {
+      "$date": {
+        "$numberLong": "1794385501660"
+      }
+    },
+    "__v": {
+      "$numberInt": "0"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "6af4265dac7d1ca854b9b6ae"
+    },
+    "treeId": {
+      "$oid": "6af41cad4416cd3e7d2e2730"
+    },
+    "parentId": {
+      "$oid": "6af41d014416cd3e7d2e2756"
+    },
+    "childId": {
+      "$oid": "6af4265dac7d1ca854b9b6a0"
+    },
+    "type": "biological",
+    "createdAt": {
+      "$date": {
+        "$numberLong": "1794385501675"
+      }
+    },
+    "updatedAt": {
+      "$date": {
+        "$numberLong": "1794385501675"
+      }
+    },
+    "__v": {
+      "$numberInt": "0"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "6af426abac7d1ca854b9b6fd"
+    },
+    "treeId": {
+      "$oid": "6af41cad4416cd3e7d2e2730"
+    },
+    "parentId": {
+      "$oid": "6af42686ac7d1ca854b9b6cb"
+    },
+    "childId": {
+      "$oid": "6af426abac7d1ca854b9b6f6"
+    },
+    "type": "biological",
+    "createdAt": {
+      "$date": {
+        "$numberLong": "1794385579726"
+      }
+    },
+    "updatedAt": {
+      "$date": {
+        "$numberLong": "1794385579726"
+      }
+    },
+    "__v": {
+      "$numberInt": "0"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "6af426abac7d1ca854b9b704"
+    },
+    "treeId": {
+      "$oid": "6af41cad4416cd3e7d2e2730"
+    },
+    "parentId": {
+      "$oid": "6af4265dac7d1ca854b9b6a0"
+    },
+    "childId": {
+      "$oid": "6af426abac7d1ca854b9b6f6"
+    },
+    "type": "biological",
+    "createdAt": {
+      "$date": {
+        "$numberLong": "1794385579739"
+      }
+    },
+    "updatedAt": {
+      "$date": {
+        "$numberLong": "1794385579739"
+      }
+    },
+    "__v": {
+      "$numberInt": "0"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "6af42876ac7d1ca854b9b8c6"
+    },
+    "treeId": {
+      "$oid": "6af41cad4416cd3e7d2e2730"
+    },
+    "parentId": {
+      "$oid": "6af420dda29987c835c9867f"
+    },
+    "childId": {
+      "$oid": "6af42876ac7d1ca854b9b8bf"
+    },
+    "type": "biological",
+    "createdAt": {
+      "$date": {
+        "$numberLong": "1794386038752"
+      }
+    },
+    "updatedAt": {
+      "$date": {
+        "$numberLong": "1794386038752"
+      }
+    },
+    "__v": {
+      "$numberInt": "0"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "6af428eeac7d1ca854b9b951"
+    },
+    "treeId": {
+      "$oid": "6af41cad4416cd3e7d2e2730"
+    },
+    "parentId": {
+      "$oid": "6af420dda29987c835c9867f"
+    },
+    "childId": {
+      "$oid": "6af428eeac7d1ca854b9b94a"
+    },
+    "type": "biological",
+    "createdAt": {
+      "$date": {
+        "$numberLong": "1794386158724"
+      }
+    },
+    "updatedAt": {
+      "$date": {
+        "$numberLong": "1794386158724"
+      }
+    },
+    "__v": {
+      "$numberInt": "0"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "6af42908ac7d1ca854b9b967"
+    },
+    "treeId": {
+      "$oid": "6af41cad4416cd3e7d2e2730"
+    },
+    "parentId": {
+      "$oid": "6af420dda29987c835c9867f"
+    },
+    "childId": {
+      "$oid": "6af42908ac7d1ca854b9b960"
+    },
+    "type": "biological",
+    "createdAt": {
+      "$date": {
+        "$numberLong": "1794386184259"
+      }
+    },
+    "updatedAt": {
+      "$date": {
+        "$numberLong": "1794386184259"
+      }
+    },
+    "__v": {
+      "$numberInt": "0"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "6af42954ac7d1ca854b9b9be"
+    },
+    "treeId": {
+      "$oid": "6af41cad4416cd3e7d2e2730"
+    },
+    "parentId": {
+      "$oid": "6af42876ac7d1ca854b9b8bf"
+    },
+    "childId": {
+      "$oid": "6af42954ac7d1ca854b9b9b7"
+    },
+    "type": "biological",
+    "createdAt": {
+      "$date": {
+        "$numberLong": "1794386260567"
+      }
+    },
+    "updatedAt": {
+      "$date": {
+        "$numberLong": "1794386260567"
+      }
+    },
+    "__v": {
+      "$numberInt": "0"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "6af42954ac7d1ca854b9b9c5"
+    },
+    "treeId": {
+      "$oid": "6af41cad4416cd3e7d2e2730"
+    },
+    "parentId": {
+      "$oid": "6af42940ac7d1ca854b9b9a2"
+    },
+    "childId": {
+      "$oid": "6af42954ac7d1ca854b9b9b7"
+    },
+    "type": "biological",
+    "createdAt": {
+      "$date": {
+        "$numberLong": "1794386260578"
+      }
+    },
+    "updatedAt": {
+      "$date": {
+        "$numberLong": "1794386260578"
+      }
+    },
+    "__v": {
+      "$numberInt": "0"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "6af42998ac7d1ca854b9ba14"
+    },
+    "treeId": {
+      "$oid": "6af41cad4416cd3e7d2e2730"
+    },
+    "parentId": {
+      "$oid": "6af42876ac7d1ca854b9b8bf"
+    },
+    "childId": {
+      "$oid": "6af42998ac7d1ca854b9ba09"
+    },
+    "type": "biological",
+    "createdAt": {
+      "$date": {
+        "$numberLong": "1794386328898"
+      }
+    },
+    "updatedAt": {
+      "$date": {
+        "$numberLong": "1794386328898"
+      }
+    },
+    "__v": {
+      "$numberInt": "0"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "6af42998ac7d1ca854b9ba17"
+    },
+    "treeId": {
+      "$oid": "6af41cad4416cd3e7d2e2730"
+    },
+    "parentId": {
+      "$oid": "6af42940ac7d1ca854b9b9a2"
+    },
+    "childId": {
+      "$oid": "6af42998ac7d1ca854b9ba09"
+    },
+    "type": "biological",
+    "createdAt": {
+      "$date": {
+        "$numberLong": "1794386328901"
+      }
+    },
+    "updatedAt": {
+      "$date": {
+        "$numberLong": "1794386328901"
+      }
+    },
+    "__v": {
+      "$numberInt": "0"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "6af429cfac7d1ca854b9ba59"
+    },
+    "treeId": {
+      "$oid": "6af41cad4416cd3e7d2e2730"
+    },
+    "parentId": {
+      "$oid": "6af429beac7d1ca854b9ba34"
+    },
+    "childId": {
+      "$oid": "6af429cfac7d1ca854b9ba52"
+    },
+    "type": "biological",
+    "createdAt": {
+      "$date": {
+        "$numberLong": "1794386383548"
+      }
+    },
+    "updatedAt": {
+      "$date": {
+        "$numberLong": "1794386383548"
+      }
+    },
+    "__v": {
+      "$numberInt": "0"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "6af429cfac7d1ca854b9ba60"
+    },
+    "treeId": {
+      "$oid": "6af41cad4416cd3e7d2e2730"
+    },
+    "parentId": {
+      "$oid": "6af428eeac7d1ca854b9b94a"
+    },
+    "childId": {
+      "$oid": "6af429cfac7d1ca854b9ba52"
+    },
+    "type": "biological",
+    "createdAt": {
+      "$date": {
+        "$numberLong": "1794386383560"
+      }
+    },
+    "updatedAt": {
+      "$date": {
+        "$numberLong": "1794386383560"
+      }
+    },
+    "__v": {
+      "$numberInt": "0"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "6af42a3fac7d1ca854b9baa7"
+    },
+    "treeId": {
+      "$oid": "6af41cad4416cd3e7d2e2730"
+    },
+    "parentId": {
+      "$oid": "6af42908ac7d1ca854b9b960"
+    },
+    "childId": {
+      "$oid": "6af42a3fac7d1ca854b9baa0"
+    },
+    "type": "biological",
+    "createdAt": {
+      "$date": {
+        "$numberLong": "1794386495026"
+      }
+    },
+    "updatedAt": {
+      "$date": {
+        "$numberLong": "1794386495026"
+      }
+    },
+    "__v": {
+      "$numberInt": "0"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "6af42a3fac7d1ca854b9baae"
+    },
+    "treeId": {
+      "$oid": "6af41cad4416cd3e7d2e2730"
+    },
+    "parentId": {
+      "$oid": "6af42a2aac7d1ca854b9ba8b"
+    },
+    "childId": {
+      "$oid": "6af42a3fac7d1ca854b9baa0"
+    },
+    "type": "biological",
+    "createdAt": {
+      "$date": {
+        "$numberLong": "1794386495032"
+      }
+    },
+    "updatedAt": {
+      "$date": {
+        "$numberLong": "1794386495032"
+      }
+    },
+    "__v": {
+      "$numberInt": "0"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "6af42a7eac7d1ca854b9bae2"
+    },
+    "treeId": {
+      "$oid": "6af41cad4416cd3e7d2e2730"
+    },
+    "parentId": {
+      "$oid": "6af42a7eac7d1ca854b9badb"
+    },
+    "childId": {
+      "$oid": "6af420dda29987c835c9867f"
+    },
+    "type": "biological",
+    "createdAt": {
+      "$date": {
+        "$numberLong": "1794386558681"
+      }
+    },
+    "updatedAt": {
+      "$date": {
+        "$numberLong": "1794386558681"
+      }
+    },
+    "__v": {
+      "$numberInt": "0"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "6af42ab9ac7d1ca854b9bb26"
+    },
+    "treeId": {
+      "$oid": "6af41cad4416cd3e7d2e2730"
+    },
+    "parentId": {
+      "$oid": "6af42aa1ac7d1ca854b9bafe"
+    },
+    "childId": {
+      "$oid": "6af42ab9ac7d1ca854b9bb1f"
+    },
+    "type": "biological",
+    "createdAt": {
+      "$date": {
+        "$numberLong": "1794386617069"
+      }
+    },
+    "updatedAt": {
+      "$date": {
+        "$numberLong": "1794386617069"
+      }
+    },
+    "__v": {
+      "$numberInt": "0"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "6af42ab9ac7d1ca854b9bb2d"
+    },
+    "treeId": {
+      "$oid": "6af41cad4416cd3e7d2e2730"
+    },
+    "parentId": {
+      "$oid": "6af42a7eac7d1ca854b9badb"
+    },
+    "childId": {
+      "$oid": "6af42ab9ac7d1ca854b9bb1f"
+    },
+    "type": "biological",
+    "createdAt": {
+      "$date": {
+        "$numberLong": "1794386617079"
+      }
+    },
+    "updatedAt": {
+      "$date": {
+        "$numberLong": "1794386617079"
+      }
+    },
+    "__v": {
+      "$numberInt": "0"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "6af42af9ac7d1ca854b9bb51"
+    },
+    "treeId": {
+      "$oid": "6af41cad4416cd3e7d2e2730"
+    },
+    "parentId": {
+      "$oid": "6af42ab9ac7d1ca854b9bb1f"
+    },
+    "childId": {
+      "$oid": "6af42af9ac7d1ca854b9bb4a"
+    },
+    "type": "biological",
+    "createdAt": {
+      "$date": {
+        "$numberLong": "1794386681804"
+      }
+    },
+    "updatedAt": {
+      "$date": {
+        "$numberLong": "1794386681804"
+      }
+    },
+    "__v": {
+      "$numberInt": "0"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "6af42b84ac7d1ca854b9bb75"
+    },
+    "treeId": {
+      "$oid": "6af41cad4416cd3e7d2e2730"
+    },
+    "parentId": {
+      "$oid": "6af41d194416cd3e7d2e2768"
+    },
+    "childId": {
+      "$oid": "6af42b84ac7d1ca854b9bb6e"
+    },
+    "type": "biological",
+    "createdAt": {
+      "$date": {
+        "$numberLong": "1794386820951"
+      }
+    },
+    "updatedAt": {
+      "$date": {
+        "$numberLong": "1794386820951"
+      }
+    },
+    "__v": {
+      "$numberInt": "0"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "6af42b93ac7d1ca854b9bb8b"
+    },
+    "treeId": {
+      "$oid": "6af41cad4416cd3e7d2e2730"
+    },
+    "parentId": {
+      "$oid": "6af41d194416cd3e7d2e2768"
+    },
+    "childId": {
+      "$oid": "6af42b93ac7d1ca854b9bb84"
+    },
+    "type": "biological",
+    "createdAt": {
+      "$date": {
+        "$numberLong": "1794386835336"
+      }
+    },
+    "updatedAt": {
+      "$date": {
+        "$numberLong": "1794386835336"
+      }
+    },
+    "__v": {
+      "$numberInt": "0"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "6af42ba8ac7d1ca854b9bba1"
+    },
+    "treeId": {
+      "$oid": "6af41cad4416cd3e7d2e2730"
+    },
+    "parentId": {
+      "$oid": "6af41d194416cd3e7d2e2768"
+    },
+    "childId": {
+      "$oid": "6af42ba8ac7d1ca854b9bb9a"
+    },
+    "type": "biological",
+    "createdAt": {
+      "$date": {
+        "$numberLong": "1794386856798"
+      }
+    },
+    "updatedAt": {
+      "$date": {
+        "$numberLong": "1794386856798"
+      }
+    },
+    "__v": {
+      "$numberInt": "0"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "6af42c8dac7d1ca854b9bc91"
+    },
+    "treeId": {
+      "$oid": "6af41cad4416cd3e7d2e2730"
+    },
+    "parentId": {
+      "$oid": "6af4265dac7d1ca854b9b6a0"
+    },
+    "childId": {
+      "$oid": "6af42c8dac7d1ca854b9bc85"
+    },
+    "type": "biological",
+    "createdAt": {
+      "$date": {
+        "$numberLong": "1794387085269"
+      }
+    },
+    "updatedAt": {
+      "$date": {
+        "$numberLong": "1794387085269"
+      }
+    },
+    "__v": {
+      "$numberInt": "0"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "6af42c8dac7d1ca854b9bc93"
+    },
+    "treeId": {
+      "$oid": "6af41cad4416cd3e7d2e2730"
+    },
+    "parentId": {
+      "$oid": "6af42686ac7d1ca854b9b6cb"
+    },
+    "childId": {
+      "$oid": "6af42c8dac7d1ca854b9bc85"
+    },
+    "type": "biological",
+    "createdAt": {
+      "$date": {
+        "$numberLong": "1794387085270"
+      }
+    },
+    "updatedAt": {
+      "$date": {
+        "$numberLong": "1794387085270"
+      }
+    },
+    "__v": {
+      "$numberInt": "0"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "6af42cf0ac7d1ca854b9bcb7"
+    },
+    "treeId": {
+      "$oid": "6af41cad4416cd3e7d2e2730"
+    },
+    "parentId": {
+      "$oid": "6af42b84ac7d1ca854b9bb6e"
+    },
+    "childId": {
+      "$oid": "6af42cf0ac7d1ca854b9bcb0"
+    },
+    "type": "biological",
+    "createdAt": {
+      "$date": {
+        "$numberLong": "1794387184071"
+      }
+    },
+    "updatedAt": {
+      "$date": {
+        "$numberLong": "1794387184071"
+      }
+    },
+    "__v": {
+      "$numberInt": "0"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "6af4339537db4fe17da030b0"
+    },
+    "treeId": {
+      "$oid": "6af41cad4416cd3e7d2e2730"
+    },
+    "parentId": {
+      "$oid": "6af4339537db4fe17da030a9"
+    },
+    "childId": {
+      "$oid": "6af41d3c4416cd3e7d2e277a"
+    },
+    "type": "biological",
+    "createdAt": {
+      "$date": {
+        "$numberLong": "1794388885103"
+      }
+    },
+    "updatedAt": {
+      "$date": {
+        "$numberLong": "1794388885103"
+      }
+    },
+    "__v": {
+      "$numberInt": "0"
+    }
+  }
+]
