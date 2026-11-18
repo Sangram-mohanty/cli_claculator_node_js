@@ -2,8 +2,8 @@ const { createHmac, randomBytes, timingSafeEqual } = require('node:crypto');
 
 /**
  * Minimal admin access: one shared admin password (ADMIN_PASSWORD) unlocks admin-only actions such as
- * deleting people. A successful sign-in returns a signed, expiring token that the browser sends back in
- * the Authorization header. This is a single-role gate, not a user-account system.
+ * deleting people. A successful sign-in returns a signed, expiring token that the browser sends in
+ * X-Admin-Token. This is a single-role gate, not a user-account system.
  */
 
 const TOKEN_LIFETIME_MS = 12 * 60 * 60 * 1000;
@@ -48,9 +48,21 @@ function verifyToken(token, now = Date.now()) {
   }
 }
 
-function bearerToken(req) {
-  const header = req.get('authorization') || '';
-  return header.startsWith('Bearer ') ? header.slice(7).trim() : '';
+function adminToken(req) {
+  return req.get('x-admin-token') || '';
+}
+
+function optionalAdmin(req, res, next) {
+  const token = adminToken(req);
+  if (!token) return next();
+  if (!isConfigured()) {
+    return res.status(403).json({ error: 'Admin access is not configured on the server.' });
+  }
+  if (!verifyToken(token)) {
+    return res.status(401).json({ error: 'Your admin session has expired. Please sign in again.' });
+  }
+  req.isAdmin = true;
+  return next();
 }
 
 /** Express middleware: lets the request through only for a signed-in admin. */
@@ -58,9 +70,10 @@ function requireAdmin(req, res, next) {
   if (!isConfigured()) {
     return res.status(403).json({ error: 'Deleting is turned off until an admin password is set on the server.' });
   }
-  if (!verifyToken(bearerToken(req))) {
+  if (!verifyToken(adminToken(req))) {
     return res.status(401).json({ error: 'Only an admin can do this. Please sign in as admin.' });
   }
+  req.isAdmin = true;
   return next();
 }
 
@@ -103,8 +116,8 @@ function login(req, res) {
 }
 
 function session(req, res) {
-  const data = verifyToken(bearerToken(req));
+  const data = verifyToken(adminToken(req));
   res.json({ configured: isConfigured(), admin: Boolean(data && isConfigured()), expiresAt: data ? new Date(data.exp).toISOString() : null });
 }
 
-module.exports = { requireAdmin, login, session, verifyToken, issueToken, isConfigured };
+module.exports = { optionalAdmin, requireAdmin, login, session, verifyToken, issueToken, isConfigured };

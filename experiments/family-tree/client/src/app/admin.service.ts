@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
-import { Observable, catchError, map, of, tap } from 'rxjs';
+import { Observable, catchError, map, of, tap, throwError } from 'rxjs';
 
 const STORAGE_KEY = 'roots-admin-token';
 
@@ -10,7 +10,7 @@ const STORAGE_KEY = 'roots-admin-token';
  */
 @Injectable({ providedIn: 'root' })
 export class AdminService {
-  private readonly apiUrl = '/api/v1/admin';
+  private readonly apiUrl = 'http://localhost:3000/api/v1/admin';
   private token = '';
 
   constructor(private readonly http: HttpClient) {
@@ -21,9 +21,9 @@ export class AdminService {
     return Boolean(this.token);
   }
 
-  /** Authorization header for admin-only requests. */
+  /** Dedicated header for admin-only requests, separate from the family-account token. */
   authHeaders(): HttpHeaders {
-    return this.token ? new HttpHeaders({ Authorization: `Bearer ${this.token}` }) : new HttpHeaders();
+    return this.token ? new HttpHeaders({ 'X-Admin-Token': this.token }) : new HttpHeaders();
   }
 
   login(password: string): Observable<void> {
@@ -33,18 +33,20 @@ export class AdminService {
     );
   }
 
-  logout(): void {
-    this.store('');
-  }
-
-  /** Confirms a remembered sign-in is still valid (e.g. not expired); forgets it otherwise. */
   checkSession(): Observable<boolean> {
     if (!this.token) return of(false);
     return this.http.get<{ admin: boolean }>(`${this.apiUrl}/session`, { headers: this.authHeaders() }).pipe(
       map(({ admin }) => admin),
-      catchError(() => of(this.isAdmin)),
-      tap((admin) => { if (!admin) this.logout(); })
+      catchError((error) => {
+        if (error?.status === 401 || error?.status === 403) return of(false);
+        return throwError(() => error);
+      }),
+      tap((isAdmin) => { if (!isAdmin) this.logout(); })
     );
+  }
+
+  logout(): void {
+    this.store('');
   }
 
   private store(token: string): void {

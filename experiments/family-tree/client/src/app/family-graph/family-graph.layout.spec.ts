@@ -1,4 +1,4 @@
-import { GraphLink, GraphPerson, NODE_WIDTH, layoutFamilyGraph } from './family-graph.layout';
+import { GraphLink, GraphPerson, NODE_HEIGHT, NODE_WIDTH, layoutFamilyGraph } from './family-graph.layout';
 
 const person = (id: string, gender = '', birthYear?: number): GraphPerson => ({ _id: id, name: id, gender, birthYear });
 const link = (parentId: string, childId: string): GraphLink => ({ parentId, childId });
@@ -21,6 +21,17 @@ describe('layoutFamilyGraph', () => {
     expect(layout.get('Grandpa')!.y).toBeLessThan(layout.get('Dad')!.y);
   });
 
+  it('lays out long family lines without a fixed generation limit', () => {
+    const ids = Array.from({ length: 24 }, (_, index) => index).reverse();
+    const people = ids.map((index) => person(`Person ${index}`));
+    const links = ids.slice(0, -1).map((index) => link(`Person ${index - 1}`, `Person ${index}`));
+
+    const layout = layoutFamilyGraph(people, links);
+
+    expect(layout.generations).toBe(24);
+    expect(layout.nodes.find((node) => node.person._id === 'Person 23')!.generation).toBe(23);
+  });
+
   it('keeps a married-in parent on the same row as their partner', () => {
     // Dad has parents in the tree; Mom does not, but she shares a child with Dad.
     const people = [person('Grandpa', 'Man'), person('Dad', 'Man'), person('Mom', 'Woman'), person('Me')];
@@ -37,6 +48,8 @@ describe('layoutFamilyGraph', () => {
     const parentsCenter = (layout.get('Dad')!.x + layout.get('Mom')!.x) / 2 + NODE_WIDTH / 2;
     expect(layout.get('Kid')!.x + NODE_WIDTH / 2).toBeCloseTo(parentsCenter, 0);
     expect(result.edges.filter((edge) => edge.kind === 'couple').length).toBe(1);
+    expect(result.edges.some((edge) => edge.kind === 'couple' && edge.d.includes(`,${layout.get('Dad')!.y + NODE_HEIGHT - 2} H`))).toBeTrue();
+    expect(result.edges.some((edge) => edge.kind === 'descent' && edge.d.endsWith(`V${layout.get('Kid')!.y}`))).toBeTrue();
   });
 
   it('never overlaps cards in the same row', () => {
@@ -59,7 +72,11 @@ describe('layoutFamilyGraph', () => {
     const layout = byName(result);
     expect(layout.get('Wife')!.generation).toBe(layout.get('Son')!.generation);
     expect(Math.abs(layout.get('Wife')!.x - layout.get('Son')!.x)).toBeLessThan(NODE_WIDTH * 1.5);
-    expect(result.edges.filter((edge) => edge.kind === 'couple').length).toBe(1);
+    const couple = result.edges.find((edge) => edge.kind === 'couple');
+    expect(couple).toBeDefined();
+    const [left, right] = layout.get('Son')!.x < layout.get('Wife')!.x ? ['Son', 'Wife'] : ['Wife', 'Son'];
+    const lineY = layout.get(left)!.y + NODE_HEIGHT - 2;
+    expect(couple!.d).toBe(`M${layout.get(left)!.x + NODE_WIDTH - 4},${lineY} H${layout.get(right)!.x + 4}`);
   });
 
   it('moves a married-in spouse’s parents and siblings down to sit beside them', () => {

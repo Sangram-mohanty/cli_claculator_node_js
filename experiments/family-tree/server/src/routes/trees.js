@@ -8,10 +8,12 @@ const FamilyTree = require('../models/FamilyTree');
 const Person = require('../models/Person');
 const Relationship = require('../models/Relationship');
 const Partnership = require('../models/Partnership');
+const { optionalAuth, requireAuth, signedPhotoUrl } = require('../auth/accounts');
+const { optionalAdmin, requireAdmin } = require('../auth/admin');
 const { createsCycle } = require('../utils/relationshipGraph');
-const { requireAdmin } = require('../auth/admin');
 
 const router = express.Router();
+router.use(optionalAuth, optionalAdmin);
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024, files: 1 }
@@ -41,24 +43,57 @@ function notFound(label) {
   return error;
 }
 
-async function findTree(treeId) {
+async function findTree(treeId, req, write = false, allowAdmin = false) {
   requireObjectId(treeId, 'Tree ID');
-  const tree = await FamilyTree.findById(treeId);
+  const tree = await FamilyTree.findById(treeId).select('+ownerId');
   if (!tree) throw notFound('Family tree');
+  if (tree.isDemo) {
+    if (write) {
+      const error = new Error('The showcase family is read-only.');
+      error.status = 403;
+      throw error;
+    }
+    return tree;
+  }
+  const ownsTree = req.user && String(tree.ownerId) === String(req.user._id);
+  const adminHasAccess = req.isAdmin && (!write || allowAdmin);
+  if (!ownsTree && !adminHasAccess) {
+    throw notFound('Family tree');
+  }
   return tree;
+}
+
+function personWithPhotoAccess(person) {
+  const result = person.toObject();
+  if (result.photoUrl) {
+    const filename = path.basename(result.photoUrl);
+    result.photoUrl = signedPhotoUrl(filename);
+  }
+  return result;
+}
+
+function peopleWithPhotoAccess(people) {
+  return people.map(personWithPhotoAccess);
 }
 
 router.get('/', async (req, res, next) => {
   try {
-    res.json(await FamilyTree.find().sort({ createdAt: 1 }));
+    const filter = req.isAdmin
+      ? {}
+      : req.user
+        ? { ownerId: req.user._id }
+        : { isDemo: true };
+    const trees = await FamilyTree.find(filter).sort({ isDemo: 1, createdAt: 1 });
+    res.json(trees);
   } catch (error) {
     next(error);
   }
 });
 
-router.post('/', async (req, res, next) => {
+router.post('/', requireAuth, async (req, res, next) => {
   try {
     const tree = await FamilyTree.create({
+      ownerId: req.user._id,
       name: req.body.name,
       village: req.body.village,
       district: req.body.district,
@@ -74,23 +109,23 @@ router.post('/', async (req, res, next) => {
 
 router.get('/:treeId/people', async (req, res, next) => {
   try {
-    await findTree(req.params.treeId);
-    res.json(await Person.find({ treeId: req.params.treeId }).sort({ name: 1 }));
+    await findTree(req.params.treeId, req);
+    res.json(peopleWithPhotoAccess(await Person.find({ treeId: req.params.treeId }).sort({ name: 1 })));
   } catch (error) {
     next(error);
   }
 });
 
-router.post('/:treeId/people', async (req, res, next) => {
+router.post('/:treeId/people', requireAuth, async (req, res, next) => {
   try {
-    await findTree(req.params.treeId);
+    await findTree(req.params.treeId, req, true);
     const person = await Person.create({
       treeId: req.params.treeId,
       name: req.body.name,
       gender: req.body.gender,
       birthYear: req.body.birthYear
     });
-    res.status(201).json(person);
+    res.status(201).json(personWithPhotoAccess(person));
   } catch (error) {
     next(error);
   }
@@ -99,7 +134,7 @@ router.post('/:treeId/people', async (req, res, next) => {
 router.get('/:treeId/people/:personId/relatives', async (req, res, next) => {
   try {
     const { treeId, personId } = req.params;
-    await findTree(treeId);
+    await findTree(treeId, req);
     requireObjectId(personId, 'Person ID');
     const person = await Person.findOne({ _id: personId, treeId });
     if (!person) throw notFound('Person');
@@ -122,14 +157,20 @@ router.get('/:treeId/people/:personId/relatives', async (req, res, next) => {
       Person.find({ _id: { $in: childIds }, treeId }).sort({ name: 1 }),
       Person.find({ _id: { $in: spouseIds }, treeId }).sort({ name: 1 })
     ]);
-    res.json({ person, parents, siblings, children, spouses });
+    res.json({
+      person: personWithPhotoAccess(person),
+      parents: peopleWithPhotoAccess(parents),
+      siblings: peopleWithPhotoAccess(siblings),
+      children: peopleWithPhotoAccess(children),
+      spouses: peopleWithPhotoAccess(spouses)
+    });
   } catch (error) {
     next(error);
   }
 });
 
-async function findPerson(treeId, personId) {
-  await findTree(treeId);
+async function findPerson(treeId, personId, req, write = false, allowAdmin = false) {
+  await findTree(treeId, req, write, allowAdmin);
   requireObjectId(personId, 'Person ID');
   const person = await Person.findOne({ _id: personId, treeId });
   if (!person) throw notFound('Person');
@@ -142,9 +183,9 @@ async function removePhotoFile(photoUrl) {
   await unlink(path.join(uploadDirectory, filename)).catch(() => {});
 }
 
-router.patch('/:treeId', requireAdmin, async (req, res, next) => {
+router.patch('/:treeId', requireAuth, async (req, res, next) => {
   try {
-    const tree = await findTree(req.params.treeId);
+    const tree = await findTree(req.params.treeId, req, true);
     for (const field of ['name', 'village', 'district', 'state', 'country', 'surname']) {
       if (req.body[field] !== undefined) tree[field] = req.body[field];
     }
@@ -157,7 +198,7 @@ router.patch('/:treeId', requireAdmin, async (req, res, next) => {
 
 router.delete('/:treeId', requireAdmin, async (req, res, next) => {
   try {
-    const tree = await findTree(req.params.treeId);
+    const tree = await findTree(req.params.treeId, req, true, true);
     const people = await Person.find({ treeId: tree._id }).select('photoUrl');
     await Promise.all([
       Relationship.deleteMany({ treeId: tree._id }),
@@ -172,14 +213,14 @@ router.delete('/:treeId', requireAdmin, async (req, res, next) => {
   }
 });
 
-router.patch('/:treeId/people/:personId', async (req, res, next) => {
+router.patch('/:treeId/people/:personId', requireAuth, async (req, res, next) => {
   try {
-    const person = await findPerson(req.params.treeId, req.params.personId);
+    const person = await findPerson(req.params.treeId, req.params.personId, req, true);
     if (req.body.name !== undefined) person.name = req.body.name;
     if (req.body.gender !== undefined) person.gender = req.body.gender ?? '';
     if (req.body.birthYear !== undefined) person.birthYear = req.body.birthYear ?? undefined;
     await person.save();
-    res.json(person);
+    res.json(personWithPhotoAccess(person));
   } catch (error) {
     next(error);
   }
@@ -187,7 +228,7 @@ router.patch('/:treeId/people/:personId', async (req, res, next) => {
 
 router.delete('/:treeId/people/:personId', requireAdmin, async (req, res, next) => {
   try {
-    const person = await findPerson(req.params.treeId, req.params.personId);
+    const person = await findPerson(req.params.treeId, req.params.personId, req, true, true);
     await Promise.all([
       Relationship.deleteMany({
         treeId: person.treeId,
@@ -208,18 +249,18 @@ router.delete('/:treeId/people/:personId', requireAdmin, async (req, res, next) 
 
 router.get('/:treeId/partnerships', async (req, res, next) => {
   try {
-    await findTree(req.params.treeId);
+    await findTree(req.params.treeId, req);
     res.json(await Partnership.find({ treeId: req.params.treeId }).select('personA personB type'));
   } catch (error) {
     next(error);
   }
 });
 
-router.post('/:treeId/partnerships', async (req, res, next) => {
+router.post('/:treeId/partnerships', requireAuth, async (req, res, next) => {
   try {
     const { treeId } = req.params;
     const { personId, partnerId, type } = req.body;
-    await findTree(treeId);
+    await findTree(treeId, req, true);
     requireObjectId(personId, 'Person ID');
     requireObjectId(partnerId, 'Partner ID');
     if (String(personId) === String(partnerId)) {
@@ -248,10 +289,10 @@ router.post('/:treeId/partnerships', async (req, res, next) => {
   }
 });
 
-router.delete('/:treeId/partnerships/:personId/:partnerId', async (req, res, next) => {
+router.delete('/:treeId/partnerships/:personId/:partnerId', requireAdmin, async (req, res, next) => {
   try {
     const { treeId, personId, partnerId } = req.params;
-    await findTree(treeId);
+    await findTree(treeId, req, true, true);
     requireObjectId(personId, 'Person ID');
     requireObjectId(partnerId, 'Partner ID');
     const [personA, personB] = Partnership.orderedPair(personId, partnerId);
@@ -265,30 +306,30 @@ router.delete('/:treeId/partnerships/:personId/:partnerId', async (req, res, nex
 
 router.get('/:treeId/relationships', async (req, res, next) => {
   try {
-    await findTree(req.params.treeId);
+    await findTree(req.params.treeId, req);
     res.json(await Relationship.find({ treeId: req.params.treeId }).select('parentId childId type'));
   } catch (error) {
     next(error);
   }
 });
 
-router.delete('/:treeId/people/:personId/photo', async (req, res, next) => {
+router.delete('/:treeId/people/:personId/photo', requireAdmin, async (req, res, next) => {
   try {
-    const person = await findPerson(req.params.treeId, req.params.personId);
+    const person = await findPerson(req.params.treeId, req.params.personId, req, true, true);
     const previousPhoto = person.photoUrl;
     person.photoUrl = '';
     await person.save();
     await removePhotoFile(previousPhoto);
-    res.json({ person });
+    res.json({ person: personWithPhotoAccess(person) });
   } catch (error) {
     next(error);
   }
 });
 
-router.delete('/:treeId/relationships/:parentId/:childId', async (req, res, next) => {
+router.delete('/:treeId/relationships/:parentId/:childId', requireAdmin, async (req, res, next) => {
   try {
     const { treeId, parentId, childId } = req.params;
-    await findTree(treeId);
+    await findTree(treeId, req, true, true);
     requireObjectId(parentId, 'Parent ID');
     requireObjectId(childId, 'Child ID');
     const result = await Relationship.deleteOne({ treeId, parentId, childId });
@@ -299,11 +340,11 @@ router.delete('/:treeId/relationships/:parentId/:childId', async (req, res, next
   }
 });
 
-router.post('/:treeId/relationships', async (req, res, next) => {
+router.post('/:treeId/relationships', requireAuth, async (req, res, next) => {
   try {
     const { treeId } = req.params;
     const { parentId, childId, type } = req.body;
-    await findTree(treeId);
+    await findTree(treeId, req, true);
     requireObjectId(parentId, 'Parent ID');
     requireObjectId(childId, 'Child ID');
     if (String(parentId) === String(childId)) {
@@ -335,10 +376,10 @@ router.post('/:treeId/relationships', async (req, res, next) => {
   }
 });
 
-router.post('/:treeId/people/:personId/photo', upload.single('photo'), async (req, res, next) => {
+router.post('/:treeId/people/:personId/photo', requireAuth, upload.single('photo'), async (req, res, next) => {
   try {
     const { treeId, personId } = req.params;
-    await findTree(treeId);
+    await findTree(treeId, req, true);
     requireObjectId(personId, 'Person ID');
     const person = await Person.findOne({ _id: personId, treeId });
     if (!person) throw notFound('Person');
@@ -360,7 +401,7 @@ router.post('/:treeId/people/:personId/photo', upload.single('photo'), async (re
     person.photoUrl = `/uploads/${filename}`;
     await person.save();
     await removePhotoFile(previousPhoto);
-    return res.json({ person });
+    return res.json({ person: personWithPhotoAccess(person) });
   } catch (error) {
     return next(error);
   }

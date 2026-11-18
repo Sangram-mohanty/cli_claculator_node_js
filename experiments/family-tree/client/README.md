@@ -26,9 +26,9 @@ A starter family-tree application for the Bahadalapur Mohanty family, built with
    npm start
    ```
 
-4. Open [http://localhost:4200](http://localhost:4200). Create the family tree, then add people and connect parents, siblings, and children. Photos accept JPEG, PNG, or WebP up to 5 MB.
+4. Open [http://localhost:4200](http://localhost:4200). The landing page displays a fictional, read-only family showcase. Sign up or sign in before creating your own private family tree. Photos accept JPEG, PNG, or WebP up to 5 MB.
 
-The API listens on port `3000`. To use MongoDB Atlas or another database, set `MONGODB_URI` in `server/.env`. `CLIENT_ORIGIN`, `PORT`, and `UPLOAD_DIR` can also be configured there. Uploaded photos are stored locally under `server/uploads` by default; this is suitable for development, not multi-instance production deployment.
+The API listens on port `3000`. To use MongoDB Atlas or another database, set `MONGODB_URI` in `server/.env`. `CLIENT_ORIGIN`, `PORT`, `UPLOAD_DIR`, and `AUTH_TOKEN_SECRET` can also be configured there. Use a long random `AUTH_TOKEN_SECRET` for persistent sessions; without one, sessions expire when the API restarts. Uploaded photos are stored locally under `server/uploads` by default; this is suitable for development, not multi-instance production deployment.
 
 ## Features
 
@@ -39,29 +39,29 @@ The API listens on port `3000`. To use MongoDB Atlas or another database, set `M
 - Find anyone quickly with the member search, including people not yet connected to anyone.
 - Edit a person's name, birth year, and gender, upload a photo, remove a parent/child link, or remove a person.
 
-## Admin
+## Accounts and privacy
 
-Only the admin can delete people, and rename or delete whole family trees; everyone else can still add, edit, link, and unlink. Set the admin password in `server/.env`:
+Each account can only list and access its own family trees. The public showcase tree contains fictional data and is read-only. Passwords are stored as scrypt hashes, and account sessions use expiring bearer tokens. Email verification and password recovery are not configured in this local starter.
 
-```
-ADMIN_PASSWORD=choose-a-strong-password
-ADMIN_TOKEN_SECRET=any-long-random-string
-```
+Family trees created before accounts were added are deliberately left unassigned and hidden; they are not automatically exposed or assigned to the first new account. Assigning/importing that data requires a deliberate owner migration.
 
-Restart the API after changing these. In the app, click **Admin sign in** (top right). The sign-in lasts 12 hours or until **Sign out**. Deleting stays turned off while `ADMIN_PASSWORD` is empty. After 5 wrong passwords, sign-in is blocked for 15 minutes. This is a single shared admin password, not per-person accounts.
+Profile photos are the only supported media upload today. Future voice or video memories should be stored as private media assets attached to a family member and use the same owner access checks.
 
 ## API
 
-Tree routes are under `/api/v1/trees`. Admin sign-in is `POST /api/v1/admin/login` with `{ password }`, which returns a token to send as `Authorization: Bearer <token>`; `GET /api/v1/admin/session` reports whether a token is valid.
+Account routes are under `/api/v1/auth`. Sign up with `POST /signup` or sign in with `POST /login`, both using `{ email, password }`; include the returned token as `Authorization: Bearer <token>` for private tree routes. `GET /session` reports the signed-in account. Tree routes are under `/api/v1/trees`.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
+| POST | `/api/v1/auth/signup` | Create an account with an email and password |
+| POST | `/api/v1/auth/login` | Sign in and receive a session token |
+| GET | `/api/v1/auth/session` | Check the current account session |
 | GET / POST | `/` | List or create family trees |
-| PATCH / DELETE | `/:treeId` | Rename or delete a family tree (admin only; deleting removes its people and links) |
+| PATCH / DELETE | `/:treeId` | Rename or delete an owned family tree (deleting removes its people and links) |
 | GET / POST | `/:treeId/people` | List or add people |
-| PATCH / DELETE | `/:treeId/people/:personId` | Edit a person (anyone); remove a person (admin only; also removes their links, marriages, and photo) |
+| PATCH / DELETE | `/:treeId/people/:personId` | Edit or remove a person in an owned family tree |
 | GET | `/:treeId/people/:personId/relatives` | Parents, siblings, and children of a person |
-| POST | `/:treeId/people/:personId/photo` | Upload a photo (`multipart/form-data`, field `photo`) |
+| POST | `/:treeId/people/:personId/photo` | Upload a photo (`multipart/form-data`, field `photo`); returned photo links are signed and expire |
 | GET / POST | `/:treeId/partnerships` | List marriages, or marry `{ personId, partnerId }` |
 | DELETE | `/:treeId/partnerships/:personId/:partnerId` | Remove a marriage (either order) |
 | GET | `/:treeId/relationships` | All parent-child links in the tree (used by the graph) |
@@ -95,7 +95,7 @@ npm run restore -- backups/<folder> --replace    # loads a backup back in
 - `Relationship` stores directed parent-to-child links. The API checks that linked people belong to the same tree and rejects cycles. Sibling lists are derived from shared parents.
 - Angular uses the versioned `/api/v1` REST API. The API and frontend are separate deployable applications.
 
-This is a local-development starter, not a production-ready public service: authentication, family invitations, access controls, cloud photo storage, and production deployment still need to be added before sharing private family data online.
+This is a local-development starter, not a production-ready public service: email verification, password recovery, family invitations, cloud photo storage, and production deployment still need to be added before sharing private family data online.
 
 ## Checks
 

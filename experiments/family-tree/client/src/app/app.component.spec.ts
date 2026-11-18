@@ -1,20 +1,52 @@
 import { TestBed } from '@angular/core/testing';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { AppComponent } from './app.component';
 import { FamilyService } from './family.service';
+import { AuthService } from './auth.service';
 import { AdminService } from './admin.service';
 
 describe('AppComponent', () => {
-  let adminStub: { isAdmin: boolean; checkSession: () => unknown; logout: () => void };
+  let authStub: {
+    isAuthenticated: boolean;
+    user: { id: string; email: string } | null;
+    checkSession: () => unknown;
+    signOut: () => void;
+    signUp: () => unknown;
+    signIn: () => unknown;
+  };
+  let adminStub: {
+    isAdmin: boolean;
+    checkSession: jasmine.Spy;
+    authHeaders: () => unknown;
+    logout: jasmine.Spy;
+  };
+  let familyServiceStub: jasmine.SpyObj<FamilyService>;
 
   beforeEach(async () => {
-    adminStub = { isAdmin: true, checkSession: () => of(true), logout: () => { adminStub.isAdmin = false; } };
-    const familyService = jasmine.createSpyObj<FamilyService>('FamilyService', ['getTrees']);
-    familyService.getTrees.and.returnValue(of([]));
+    authStub = {
+      isAuthenticated: false,
+      user: null,
+      checkSession: () => of(null),
+      signOut: () => { authStub.isAuthenticated = false; authStub.user = null; },
+      signUp: () => of(undefined),
+      signIn: () => of(undefined)
+    };
+    adminStub = {
+      isAdmin: false,
+      checkSession: jasmine.createSpy('checkSession').and.callFake(() => of(adminStub.isAdmin)),
+      authHeaders: () => null,
+      logout: jasmine.createSpy('logout').and.callFake(() => { adminStub.isAdmin = false; })
+    };
+    familyServiceStub = jasmine.createSpyObj<FamilyService>(
+      'FamilyService', ['getTrees', 'getRelatives', 'deleteTree', 'removeRelationship', 'removePartnership']
+    );
+    familyServiceStub.getTrees.and.returnValue(of([]));
+    familyServiceStub.getRelatives.and.returnValue(of({ person: null, parents: [], siblings: [], children: [], spouses: [] }));
     await TestBed.configureTestingModule({
       imports: [AppComponent],
       providers: [
-        { provide: FamilyService, useValue: familyService },
+        { provide: FamilyService, useValue: familyServiceStub },
+        { provide: AuthService, useValue: authStub },
         { provide: AdminService, useValue: adminStub }
       ]
     }).compileComponents();
@@ -29,6 +61,79 @@ describe('AppComponent', () => {
     expect(fixture.componentInstance).toBeTruthy();
     expect(fixture.nativeElement.textContent).toContain('Every family has');
     expect(fixture.nativeElement.textContent).toContain('Create your family tree');
+    expect(fixture.nativeElement.querySelector('.app-footer')?.textContent).toContain('Created by Sangram Mohanty');
+  });
+
+  it('restores admin access and hides regular account controls', async () => {
+    adminStub.isAdmin = true;
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(adminStub.checkSession).toHaveBeenCalled();
+    expect(fixture.nativeElement.querySelector('.topbar-actions')?.textContent).toContain('Admin access');
+    expect(fixture.nativeElement.querySelector('.topbar-actions')?.textContent).not.toContain('Sign in');
+    expect(fixture.nativeElement.querySelector('.topbar-actions')?.textContent).not.toContain('Sign up');
+  });
+
+  it('keeps regular account controls for a signed-in user', async () => {
+    authStub.isAuthenticated = true;
+    authStub.user = { id: 'user-id', email: 'person@example.test' };
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.topbar-actions')?.textContent).toContain('person@example.test');
+    expect(fixture.nativeElement.querySelector('.topbar-actions')?.textContent).not.toContain('Admin sign in');
+  });
+
+  it('keeps the shared sign-in form for family accounts only', async () => {
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.topbar-actions')?.textContent).not.toContain('Admin');
+    fixture.nativeElement.querySelector('.topbar-actions button')?.click();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.auth-tabs')).toBeNull();
+    expect(fixture.nativeElement.textContent).not.toContain('Admin sign in');
+    expect(fixture.nativeElement.textContent).toContain('Welcome back');
+  });
+
+  it('requires admin access before deleting a family or unlinking relatives', () => {
+    const component = TestBed.createComponent(AppComponent).componentInstance;
+    component.selectedTree = { _id: 't', name: 'Family', village: 'V', surname: 'S' };
+    component.selectedPerson = { _id: 'p', treeId: 't', name: 'Person' };
+    component.confirmTreeName = 'Family';
+
+    component.openDeleteTree();
+    component.deleteSelectedTree();
+    component.unlink({ _id: 'relative', treeId: 't', name: 'Relative' }, 'child');
+
+    expect(component.modalType).toBeNull();
+    expect(familyServiceStub.deleteTree).not.toHaveBeenCalled();
+    expect(familyServiceStub.removeRelationship).not.toHaveBeenCalled();
+  });
+
+  it('clears an expired admin session and reloads the guest showcase', () => {
+    adminStub.isAdmin = true;
+    adminStub.checkSession.and.returnValue(of(true));
+    familyServiceStub.getTrees.and.returnValues(
+      throwError(() => ({ status: 401 })),
+      of([])
+    );
+    const component = TestBed.createComponent(AppComponent).componentInstance;
+
+    component.loadTrees();
+
+    expect(adminStub.logout).toHaveBeenCalled();
+    expect(familyServiceStub.getTrees).toHaveBeenCalledTimes(2);
+    expect(component.errorMessage).toBe('');
+    expect(component.notice).toContain('admin session has expired');
+    expect(component.loading).toBeFalse();
   });
 
   describe('family member helpers', () => {
@@ -41,6 +146,16 @@ describe('AppComponent', () => {
       expect(component.searchResults.map((p) => p._id)).toEqual(['1', '2']);
       component.searchTerm = '  ';
       expect(component.searchResults).toEqual([]);
+    });
+
+    it('counts parent-child and partnership connections from loaded data', () => {
+      const component = TestBed.createComponent(AppComponent).componentInstance;
+      component.relationships = [
+        { _id: 'r1', parentId: '1', childId: '2' },
+        { _id: 'r2', parentId: '2', childId: '3' }
+      ];
+      component.partnerships = [{ _id: 'p1', personA: '1', personB: '4' }];
+      expect(component.connectionCount).toBe(3);
     });
 
     it('offers only unrelated people as link candidates', () => {
@@ -92,6 +207,8 @@ describe('AppComponent', () => {
 
     it('opens a delete confirmation that lists the links being removed', () => {
       const component = TestBed.createComponent(AppComponent).componentInstance;
+      adminStub.isAdmin = true;
+      component.selectedTree = { _id: 't', name: 'Family', village: 'V', surname: 'S' };
       component.selectedPerson = { ...person('1', 'Ramesh'), photoUrl: '/uploads/x.png' };
       component.relatives = {
         person: null, parents: [person('2', 'Hari')], siblings: [person('5', 'Rina')],
@@ -104,24 +221,34 @@ describe('AppComponent', () => {
       ]);
     });
 
-    it('asks a non-admin to sign in instead of opening the delete confirmation', () => {
+    it('does not allow changes to the public showcase family', () => {
       const component = TestBed.createComponent(AppComponent).componentInstance;
-      adminStub.isAdmin = false;
+      component.selectedTree = { _id: 'demo', name: 'Sample', village: 'V', surname: 'S', isDemo: true };
       component.selectedPerson = person('1', 'Ramesh');
       component.openDeleteConfirm();
-      expect(component.modalType).toBe('admin');
-      expect(component.formError).toContain('Only an admin');
+      component.openEditForm();
+      component.openPersonForm('root');
+      expect(component.modalType).toBeNull();
     });
 
-    it('only lets the admin start deleting a family, and needs the family name typed', () => {
+    it('opens the read-only details view when a showcase graph person is selected', () => {
       const component = TestBed.createComponent(AppComponent).componentInstance;
+      const selected = person('1', 'Ada Meadow');
+      component.selectedTree = { _id: 'demo', name: 'Sample', village: 'V', surname: 'S', isDemo: true };
+      component.people = [selected];
+      component.view = 'graph';
+
+      component.openFromGraph(selected._id);
+
+      expect(component.view).toBe('branch');
+      expect(component.selectedPerson?._id).toBe(selected._id);
+    });
+
+    it('requires an admin to delete a family, and needs the family name typed', () => {
+      const component = TestBed.createComponent(AppComponent).componentInstance;
+      adminStub.isAdmin = true;
       component.selectedTree = { _id: 't1', name: 'Mohanty Family', village: 'V', surname: 'Mohanty' };
 
-      adminStub.isAdmin = false;
-      component.openDeleteTree();
-      expect(component.modalType).toBe('admin');
-
-      adminStub.isAdmin = true;
       component.openDeleteTree();
       expect(component.modalType).toBe('deleteTree');
       expect(component.treeNameConfirmed).toBeFalse();
@@ -131,16 +258,10 @@ describe('AppComponent', () => {
       expect(component.treeNameConfirmed).toBeTrue();
     });
 
-    it('only lets the admin edit the family name, pre-filled with the current details', () => {
+    it('opens the family details form with the current details', () => {
       const component = TestBed.createComponent(AppComponent).componentInstance;
       component.selectedTree = { _id: 't1', name: 'Mohanty Family', village: 'Bahadalapur', surname: 'Mohanty', state: 'Odisha', country: 'India' };
 
-      adminStub.isAdmin = false;
-      component.openEditTree();
-      expect(component.modalType).toBe('admin');
-      expect(component.formError).toContain('Only an admin');
-
-      adminStub.isAdmin = true;
       component.openEditTree();
       expect(component.modalType).toBe('editTree');
       expect(component.editTreeForm).toEqual({

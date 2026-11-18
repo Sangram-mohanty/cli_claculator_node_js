@@ -3,12 +3,14 @@ import { FormsModule } from '@angular/forms';
 import { Observable, catchError, forkJoin, of, switchMap, throwError } from 'rxjs';
 import { FamilyService, FamilyTree, Partnership, Person, PersonInput, PersonRelatives, Relationship } from './family.service';
 import { FamilyGraphComponent } from './family-graph/family-graph.component';
+import { AuthService } from './auth.service';
 import { AdminService } from './admin.service';
 
-type ModalType = 'tree' | 'editTree' | 'person' | 'edit' | 'delete' | 'deleteTree' | 'admin' | null;
+type ModalType = 'tree' | 'editTree' | 'person' | 'edit' | 'delete' | 'deleteTree' | 'auth' | null;
 type PersonMode = 'new' | 'existing';
 type PersonRole = 'root' | 'father' | 'mother' | 'spouse' | 'child' | 'sibling';
 type ViewMode = 'branch' | 'graph';
+type AuthMode = 'signup' | 'login';
 
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -49,7 +51,10 @@ export class AppComponent implements OnInit, OnDestroy {
   otherParentId = '';
   /** Set in the edit form when the person's current photo should be deleted on save. */
   removeCurrentPhoto = false;
-  adminPassword = '';
+  authMode: AuthMode = 'signup';
+  authEmail = '';
+  authPassword = '';
+  createTreeAfterAuth = false;
   /** The family name typed to confirm deleting a whole family tree. */
   confirmTreeName = '';
   editTreeForm = { name: '', surname: '', village: '', district: '', state: '', country: '' };
@@ -59,44 +64,97 @@ export class AppComponent implements OnInit, OnDestroy {
   personForm: PersonInput = { name: '', gender: '', birthYear: null };
   readonly currentYear = new Date().getFullYear();
 
-  constructor(private readonly familyService: FamilyService, readonly admin: AdminService) {}
+  constructor(private readonly familyService: FamilyService, readonly auth: AuthService, readonly admin: AdminService) {}
 
   ngOnInit(): void {
-    this.loadTrees();
-    this.admin.checkSession().subscribe();
-  }
-
-  openAdminLogin(): void {
-    this.formError = '';
-    this.adminPassword = '';
-    this.modalType = 'admin';
-  }
-
-  signInAdmin(): void {
-    if (!this.adminPassword) {
-      this.formError = 'Enter the admin password.';
-      return;
-    }
-    this.saving = true;
-    this.formError = '';
-    this.admin.login(this.adminPassword).subscribe({
-      next: () => {
-        this.saving = false;
-        this.adminPassword = '';
-        this.modalType = null;
-        this.showNotice('Signed in as admin. You can now delete people, and edit or delete families.');
+    this.admin.checkSession().subscribe({
+      next: (isAdmin) => {
+        if (isAdmin) {
+          if (this.auth.isAuthenticated) this.auth.signOut();
+          this.loadTrees();
+          return;
+        }
+        if (!this.auth.isAuthenticated) {
+          this.loadTrees();
+          return;
+        }
+        this.auth.checkSession().subscribe({
+          next: () => this.loadTrees(),
+          error: (error) => {
+            if (error?.status === 401) {
+              this.auth.signOut();
+              this.loadTrees();
+            } else {
+              this.errorMessage = this.apiError(error, 'Your account could not be checked.');
+              this.loading = false;
+            }
+          }
+        });
       },
       error: (error) => {
-        this.saving = false;
-        this.formError = this.apiError(error, 'Admin sign-in failed.');
+        this.errorMessage = this.apiError(error, 'Your admin session could not be checked.');
+        this.loading = false;
       }
     });
   }
 
+  openAuth(mode: AuthMode, createTreeAfterAuth = false): void {
+    this.formError = '';
+    this.authMode = mode;
+    this.authEmail = '';
+    this.authPassword = '';
+    this.createTreeAfterAuth = createTreeAfterAuth;
+    this.modalType = 'auth';
+  }
+
+  submitAuth(): void {
+    if (!this.authEmail.trim() || !this.authPassword) {
+      this.formError = 'Enter your email and password.';
+      return;
+    }
+    this.saving = true;
+    this.formError = '';
+    const request = this.authMode === 'signup'
+      ? this.auth.signUp(this.authEmail.trim(), this.authPassword)
+      : this.auth.signIn(this.authEmail.trim(), this.authPassword);
+    request.subscribe({
+      next: () => {
+        this.saving = false;
+        const shouldCreateTree = this.createTreeAfterAuth;
+        this.authEmail = '';
+        this.authPassword = '';
+        this.createTreeAfterAuth = false;
+        this.modalType = null;
+        this.loadTrees();
+        this.showNotice(this.authMode === 'signup' ? 'Your private account is ready.' : 'You are signed in.');
+        if (shouldCreateTree) this.openTreeForm();
+      },
+      error: (error) => {
+        this.saving = false;
+        this.formError = this.apiError(error, this.authMode === 'signup' ? 'Account creation failed.' : 'Sign in failed.');
+      }
+    });
+  }
+
+  signOut(): void {
+    this.auth.signOut();
+    this.trees = [];
+    this.selectedTree = null;
+    this.people = [];
+    this.selectedPerson = null;
+    this.relationships = [];
+    this.partnerships = [];
+    this.relatives = emptyRelatives();
+    this.modalType = null;
+    this.loadTrees();
+    this.showNotice('You are signed out. Your family data is no longer shown.');
+  }
+
   signOutAdmin(): void {
     this.admin.logout();
-    if (this.modalType === 'delete') this.modalType = null;
-    this.showNotice('Signed out of admin.');
+    this.modalType = null;
+    this.loadTrees();
+    this.showNotice('Admin signed out.');
   }
 
   ngOnDestroy(): void {
@@ -105,7 +163,7 @@ export class AppComponent implements OnInit, OnDestroy {
 
   setView(view: ViewMode): void {
     this.view = view;
-    if (view === 'graph') this.loadGraph();
+    if (this.view === 'graph') this.loadGraph();
   }
 
   /** Clicking someone in the graph opens their branch. */
@@ -132,6 +190,16 @@ export class AppComponent implements OnInit, OnDestroy {
         }
       },
       error: (error) => {
+        if (this.handleExpiredAdminSession(error)) return;
+        if (error?.status === 401 && this.auth.isAuthenticated) {
+          this.auth.signOut();
+          this.trees = [];
+          this.selectedTree = null;
+          this.people = [];
+          this.selectedPerson = null;
+          this.loadTrees();
+          return;
+        }
         this.errorMessage = this.apiError(error, 'The family service could not be reached.');
         this.loading = false;
       }
@@ -139,6 +207,7 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   selectTree(tree: FamilyTree): void {
+    if (tree.isDemo) this.view = 'graph';
     if (this.selectedTree?._id !== tree._id) {
       this.selectedPerson = null;
       this.searchTerm = '';
@@ -158,6 +227,7 @@ export class AppComponent implements OnInit, OnDestroy {
         if (this.view === 'graph') this.loadGraph();
       },
       error: (error) => {
+        if (this.handleExpiredAdminSession(error)) return;
         this.errorMessage = this.apiError(error, 'People in this family could not be loaded.');
         this.loading = false;
       }
@@ -175,6 +245,10 @@ export class AppComponent implements OnInit, OnDestroy {
     const term = this.searchTerm.trim().toLowerCase();
     if (!term) return [];
     return this.people.filter((person) => person.name.toLowerCase().includes(term)).slice(0, 8);
+  }
+
+  get connectionCount(): number {
+    return this.relationships.length + this.partnerships.length;
   }
 
   /** People who could be linked to the selected person for the current role. */
@@ -230,6 +304,11 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   openTreeForm(): void {
+    if (this.admin.isAdmin) return;
+    if (!this.auth.isAuthenticated) {
+      this.openAuth('signup', true);
+      return;
+    }
     // Always start with an empty form for a new family.
     this.treeForm = { name: '', surname: '', village: '', district: '', state: '', country: '' };
     this.formError = '';
@@ -237,6 +316,7 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   openPersonForm(role: PersonRole): void {
+    if (this.selectedTree?.isDemo) return;
     if (role === 'sibling' && !this.canAddSibling) return;
     if (role === 'father' && !this.canAddFather) return;
     if (role === 'mother' && !this.canAddMother) return;
@@ -276,7 +356,7 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   openEditForm(): void {
-    if (!this.selectedPerson) return;
+    if (!this.selectedPerson || this.selectedTree?.isDemo) return;
     this.formError = '';
     this.personForm = {
       name: this.selectedPerson.name,
@@ -296,6 +376,7 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   markPhotoForRemoval(): void {
+    if (!this.admin.isAdmin) return;
     this.clearNewPhoto();
     this.removeCurrentPhoto = true;
   }
@@ -315,11 +396,7 @@ export class AppComponent implements OnInit, OnDestroy {
 
   openEditTree(): void {
     if (!this.selectedTree) return;
-    if (!this.admin.isAdmin) {
-      this.openAdminLogin();
-      this.formError = 'Only an admin can edit the family name. Sign in as admin to continue.';
-      return;
-    }
+    if (this.selectedTree.isDemo) return;
     const { name, surname, village, district = '', state = '', country = '' } = this.selectedTree;
     this.editTreeForm = { name, surname, village, district, state, country };
     this.formError = '';
@@ -343,19 +420,15 @@ export class AppComponent implements OnInit, OnDestroy {
       },
       error: (error) => {
         this.saving = false;
-        if (error?.status === 401) this.admin.logout();
         this.formError = this.apiError(error, 'The family details could not be saved.');
       }
     });
   }
 
   openDeleteTree(): void {
+    if (!this.admin.isAdmin) return;
     if (!this.selectedTree) return;
-    if (!this.admin.isAdmin) {
-      this.openAdminLogin();
-      this.formError = 'Only an admin can delete a family. Sign in as admin to continue.';
-      return;
-    }
+    if (this.selectedTree.isDemo) return;
     this.formError = '';
     this.confirmTreeName = '';
     this.modalType = 'deleteTree';
@@ -368,6 +441,7 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   deleteSelectedTree(): void {
+    if (!this.admin.isAdmin) return;
     if (!this.selectedTree || !this.treeNameConfirmed) return;
     const removed = this.selectedTree;
     this.saving = true;
@@ -389,7 +463,7 @@ export class AppComponent implements OnInit, OnDestroy {
       },
       error: (error) => {
         this.saving = false;
-        if (error?.status === 401) this.admin.logout();
+        if (this.handleExpiredAdminSession(error)) return;
         this.formError = this.apiError(error, 'This family could not be deleted.');
       }
     });
@@ -440,7 +514,7 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   createPerson(): void {
-    if (!this.selectedTree) return;
+    if (!this.selectedTree || this.selectedTree.isDemo) return;
     if (this.personMode === 'existing' && this.personRole !== 'root') {
       this.linkExistingPerson();
       return;
@@ -494,7 +568,7 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   updatePerson(): void {
-    if (!this.selectedTree || !this.selectedPerson) return;
+    if (!this.selectedTree || this.selectedTree.isDemo || !this.selectedPerson) return;
     if (!this.personForm.name.trim()) {
       this.formError = 'Please enter a name.';
       return;
@@ -504,7 +578,7 @@ export class AppComponent implements OnInit, OnDestroy {
     const treeId = this.selectedTree._id;
     const personId = this.selectedPerson._id;
     const photo = this.newPhoto;
-    const removePhoto = this.removeCurrentPhoto && !photo && !!this.selectedPerson.photoUrl;
+    const removePhoto = this.admin.isAdmin && this.removeCurrentPhoto && !photo && !!this.selectedPerson.photoUrl;
     this.familyService.updatePerson(treeId, personId, this.personForm).pipe(
       switchMap((person) => photo
         ? this.familyService.uploadPhoto(treeId, personId, photo)
@@ -518,20 +592,18 @@ export class AppComponent implements OnInit, OnDestroy {
         this.refreshPeople(person._id);
       },
       error: (error) => {
-        this.formError = this.apiError(error, 'The changes could not be saved.');
         this.saving = false;
+        if (this.handleExpiredAdminSession(error)) return;
+        this.formError = this.apiError(error, 'The changes could not be saved.');
       }
     });
   }
 
   /** Opens the delete confirmation for the selected person (also reachable from the edit form). */
   openDeleteConfirm(): void {
+    if (!this.admin.isAdmin) return;
     if (!this.selectedPerson) return;
-    if (!this.admin.isAdmin) {
-      this.openAdminLogin();
-      this.formError = 'Only an admin can delete people. Sign in as admin to continue.';
-      return;
-    }
+    if (this.selectedTree?.isDemo) return;
     this.formError = '';
     this.modalType = 'delete';
   }
@@ -549,12 +621,12 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   deleteSelectedPerson(): void {
-    if (!this.selectedTree || !this.selectedPerson) return;
+    if (!this.admin.isAdmin || !this.selectedTree || !this.selectedPerson || this.selectedTree.isDemo) return;
     const removed = this.selectedPerson;
     const fallback = this.relatives.spouses[0] ?? this.relatives.parents[0] ?? this.relatives.children[0] ?? this.relatives.siblings[0];
     this.saving = true;
     this.formError = '';
-    this.familyService.deletePerson(this.selectedTree._id, removed._id).subscribe({
+    this.familyService.deletePerson(this.selectedTree._id, removed._id, this.admin.authHeaders()).subscribe({
       next: () => {
         this.saving = false;
         this.modalType = null;
@@ -564,14 +636,15 @@ export class AppComponent implements OnInit, OnDestroy {
       },
       error: (error) => {
         this.saving = false;
-        if (error?.status === 401) this.admin.logout();
+        if (this.handleExpiredAdminSession(error)) return;
         this.formError = this.apiError(error, 'This person could not be deleted.');
       }
     });
   }
 
   unlink(relative: Person, relation: 'parent' | 'child' | 'spouse'): void {
-    if (!this.selectedTree || !this.selectedPerson) return;
+    if (!this.admin.isAdmin) return;
+    if (!this.selectedTree || this.selectedTree.isDemo || !this.selectedPerson) return;
     const selected = this.selectedPerson;
     const treeId = this.selectedTree._id;
     const request$ = relation === 'spouse'
@@ -584,7 +657,10 @@ export class AppComponent implements OnInit, OnDestroy {
         this.loadRelatives(selected);
         if (this.view === 'graph') this.loadGraph();
       },
-      error: (error) => this.showNotice(this.apiError(error, 'The connection could not be removed.'))
+      error: (error) => {
+        if (this.handleExpiredAdminSession(error)) return;
+        this.showNotice(this.apiError(error, 'The connection could not be removed.'));
+      }
     });
   }
 
@@ -593,7 +669,7 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   uploadPhoto(event: Event): void {
-    if (!this.selectedTree || !this.selectedPerson) return;
+    if (!this.selectedTree || this.selectedTree.isDemo || !this.selectedPerson) return;
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
@@ -629,6 +705,7 @@ export class AppComponent implements OnInit, OnDestroy {
         this.selectedPerson = relatives.person ?? person;
       },
       error: (error) => {
+        if (this.handleExpiredAdminSession(error)) return;
         this.showNotice(this.apiError(error, 'This family member’s connections could not be loaded.'));
       }
     });
@@ -704,7 +781,10 @@ export class AppComponent implements OnInit, OnDestroy {
         this.relationships = relationships;
         this.partnerships = partnerships;
       },
-      error: (error) => this.showNotice(this.apiError(error, 'The family graph could not be loaded.'))
+      error: (error) => {
+        if (this.handleExpiredAdminSession(error)) return;
+        this.showNotice(this.apiError(error, 'The family graph could not be loaded.'));
+      }
     });
   }
 
@@ -725,9 +805,26 @@ export class AppComponent implements OnInit, OnDestroy {
         }
       },
       error: (error) => {
+        if (this.handleExpiredAdminSession(error)) return;
         this.showNotice(this.apiError(error, 'The updated family members could not be loaded.'));
       }
     });
+  }
+
+  private handleExpiredAdminSession(error: { status?: number } | null | undefined): boolean {
+    if (error?.status !== 401 || !this.admin.isAdmin) return false;
+
+    this.admin.logout();
+    this.trees = [];
+    this.selectedTree = null;
+    this.people = [];
+    this.selectedPerson = null;
+    this.relatives = emptyRelatives();
+    this.relationships = [];
+    this.partnerships = [];
+    this.showNotice('Your admin session has expired. Sign in again to continue.');
+    this.loadTrees();
+    return true;
   }
 
   private apiError(error: { error?: { error?: string }; message?: string }, fallback: string): string {

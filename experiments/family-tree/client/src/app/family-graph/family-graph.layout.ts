@@ -41,11 +41,12 @@ export interface GraphLayout {
 
 /** Each person is a round portrait with their name underneath. */
 export const NODE_WIDTH = 132;
-export const NODE_HEIGHT = 158;
-export const PHOTO_SIZE = 84;
-/** Distance from the top of a node to the centre of its portrait. */
-export const PHOTO_CENTER_Y = PHOTO_SIZE / 2 + 10;
+export const NODE_HEIGHT = 138;
+export const PHOTO_SIZE = 72;
+/** Distance from the top of a node to the centre of its portrait frame. */
+export const PHOTO_CENTER_Y = PHOTO_SIZE / 2 + 5;
 const COUPLE_GAP = 14;
+const LABEL_HALF_WIDTH = (NODE_WIDTH - 8) / 2;
 const BLOCK_GAP = 44;
 const ROW_GAP = 52;
 const PADDING = 36;
@@ -335,14 +336,14 @@ function buildEdges(
   const unitsPerRow = new Map<number, number>();
   for (const { parents, children } of units.values()) {
     const parentGen = Math.max(...parents.map((id) => generation.get(id)!));
-    const parentBottom = rowY(parentGen) + NODE_HEIGHT;
-    const parentMid = rowY(parentGen) + PHOTO_CENTER_Y;
+    const parentBottom = rowY(parentGen) + NODE_HEIGHT - 1;
+    const parentMid = rowY(parentGen) + NODE_HEIGHT - 2;
 
     // Stagger the horizontal bus of different families in the same gap so they stay distinguishable.
     const slot = unitsPerRow.get(parentGen) ?? 0;
     unitsPerRow.set(parentGen, slot + 1);
     const childTop = Math.min(...children.map((id) => rowY(generation.get(id)!)));
-    const busY = childTop - ROW_GAP / 2 + ((slot % 5) - 2) * 6;
+    const busY = childTop - ROW_GAP / 2 + ((slot % 13) - 6) * 4;
 
     const isCouple = parents.length === 2
       && generation.get(parents[0]) === generation.get(parents[1])
@@ -353,8 +354,8 @@ function buildEdges(
     if (isCouple) {
       const [left, right] = parents;
       const coupleKey = `${left}|${right}`;
-      const leftEdge = center(left) + PHOTO_SIZE / 2;
-      const rightEdge = center(right) - PHOTO_SIZE / 2;
+      const leftEdge = center(left) + LABEL_HALF_WIDTH;
+      const rightEdge = center(right) - LABEL_HALF_WIDTH;
       if (!drawnCouples.has(coupleKey)) {
         edges.push({ kind: 'couple', d: `M${leftEdge},${parentMid} H${rightEdge}` });
         drawnCouples.add(coupleKey);
@@ -373,7 +374,7 @@ function buildEdges(
     const maxX = Math.max(...xs);
     if (maxX - minX > 0.5) edges.push({ kind: 'descent', d: `M${minX},${busY} H${maxX}` });
     for (const childId of children) {
-      const photoTop = rowY(generation.get(childId)!) + PHOTO_CENTER_Y - PHOTO_SIZE / 2;
+      const photoTop = rowY(generation.get(childId)!) + PHOTO_CENTER_Y - PHOTO_SIZE / 2 - 5;
       edges.push({ kind: 'descent', d: `M${center(childId)},${busY} V${photoTop}` });
     }
   }
@@ -384,8 +385,8 @@ function buildEdges(
     const [left, right] = position.get(a)! < position.get(b)! ? [a, b] : [b, a];
     if (drawnCouples.has(`${left}|${right}`)) continue;
     drawnCouples.add(`${left}|${right}`);
-    const y = rowY(generation.get(left)!) + PHOTO_CENTER_Y;
-    edges.push({ kind: 'couple', d: `M${center(left) + PHOTO_SIZE / 2},${y} H${center(right) - PHOTO_SIZE / 2}` });
+    const y = rowY(generation.get(left)!) + NODE_HEIGHT - 2;
+    edges.push({ kind: 'couple', d: `M${center(left) + LABEL_HALF_WIDTH},${y} H${center(right) - LABEL_HALF_WIDTH}` });
   }
   return edges;
 }
